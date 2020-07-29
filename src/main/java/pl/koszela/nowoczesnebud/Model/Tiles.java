@@ -1,11 +1,9 @@
 package pl.koszela.nowoczesnebud.Model;
 
-import com.opencsv.bean.CsvBindByName;
+import com.poiji.annotation.ExcelCell;
+import com.poiji.annotation.ExcelCellName;
 
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Id;
+import javax.persistence.*;
 
 @Entity
 public class Tiles {
@@ -13,21 +11,29 @@ public class Tiles {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @CsvBindByName(column = "basicDiscount", required = true)
+    @ExcelCellName("basicDiscount")
     private Integer basicDiscount;
-    @CsvBindByName(column = "promotionDiscount", required = true)
+    @ExcelCellName("promotionDiscount")
     private Integer promotionDiscount;
-    @CsvBindByName(column = "additionalDiscount", required = true)
+    @ExcelCellName("additionalDiscount")
     private Integer additionalDiscount;
-    @CsvBindByName(column = "skontoDiscount", required = true)
+    @ExcelCellName("skonto")
     private Integer skontoDiscount;
-    @CsvBindByName(column = "name")
+    @ExcelCellName("name")
     private String name;
-    @CsvBindByName(column = "unitDetalPrice", required = true)
+    @ExcelCell(1)
     private Double unitDetalPrice;
+    @ExcelCell(2)
+    private Double quantityConverter;
+    private Double quantity = 0.0;
     private String manufacturer;
+    private TotalValues totalValues;
 
     public Tiles() {
+    }
+
+    private double calculatePercentage(double obtained) {
+        return (100 - obtained) / 100;
     }
 
     public Long getId() {
@@ -96,21 +102,30 @@ public class Tiles {
 
     @Override
     public String toString() {
-//        StringBuilder builder = new StringBuilder();
-//        builder.append("Tiles{name=").append(name).append(", unitDetalPrice=")
-//                .append(unitDetalPrice).append(", basicDiscount=").append(basicDiscount)
-//                .append(", additionalDiscount=").append(additionalDiscount)
-//                .append(", promotionDiscount=").append(promotionDiscount)
-//                .append(", skontoDiscount=").append(skontoDiscount).append("}");
-//
-//        return builder.toString();
         return "Tiles{" +
                 "name=" + name +
                 ", unitDetalPrice=" + unitDetalPrice +
+                ", quantityConverter=" + quantityConverter +
                 ", basicDiscount=" + basicDiscount +
                 ", additionalDiscount=" + additionalDiscount +
                 ", promotionDiscount=" + promotionDiscount +
                 ", skontoDiscount=" + skontoDiscount +
                 '}';
+    }
+
+    public Double getQuantityConverter() {
+        return quantityConverter;
+    }
+
+    public void setQuantityConverter(Double quantityConverter) {
+        this.quantityConverter = quantityConverter;
+    }
+
+    public Double getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(Double quantity) {
+        this.quantity = quantity;
     }
 }

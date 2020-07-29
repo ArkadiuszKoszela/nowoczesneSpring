@@ -1,26 +1,21 @@
 package pl.koszela.nowoczesnebud.Model;
 
+import org.springframework.beans.factory.annotation.Value;
+
 import javax.persistence.Embeddable;
 import javax.persistence.Entity;
 import javax.persistence.Inheritance;
 import javax.persistence.InheritanceType;
 
-@Entity
 @Embeddable
-public class BaseEntity {
+public class TotalValues {
 
-    private Double unitPurchasePrice = 0.0;
-    private Double totalPriceAfterDiscount = 0.0;
-    private Double totalPricePurchase = 0.0;
-    private Double totalProfit = 0.0;
-
-    public Double getUnitPurchasePrice() {
-        return unitPurchasePrice;
-    }
-
-    public void setUnitPurchasePrice(Double unitPurchasePrice) {
-        this.unitPurchasePrice = unitPurchasePrice;
-    }
+    @Value("0.0")
+    private Double totalPriceAfterDiscount;
+    @Value("0.0")
+    private Double totalPricePurchase;
+    @Value("0.0")
+    private Double totalProfit;
 
     public Double getTotalPriceAfterDiscount() {
         return totalPriceAfterDiscount;

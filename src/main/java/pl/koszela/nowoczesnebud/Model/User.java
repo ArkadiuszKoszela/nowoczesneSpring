@@ -3,14 +3,19 @@ package pl.koszela.nowoczesnebud.Model;
 import javax.persistence.*;
 
 @Entity
-public class TilesInput {
+public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
-
     private String name;
-    private double quantity;
+
+    public User() {
+    }
+
+    public User(String name) {
+        this.name = name;
+    }
 
     public long getId() {
         return id;
@@ -26,13 +31,5 @@ public class TilesInput {
 
     public void setName(String name) {
         this.name = name;
-    }
-
-    public double getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(double quantity) {
-        this.quantity = quantity;
     }
 }

@@ -1,6 +1,7 @@
 package pl.koszela.nowoczesnebud.Model;
 
-import com.opencsv.bean.CsvBindByName;
+import com.poiji.annotation.ExcelCell;
+import com.poiji.annotation.ExcelCellName;
 
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
@@ -8,27 +9,26 @@ import javax.persistence.GenerationType;
 import javax.persistence.Id;
 
 @Entity
-public class Tiles {
+public class Accessories {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @CsvBindByName(column = "basicDiscount", required = true)
-    private Integer basicDiscount;
-    @CsvBindByName(column = "promotionDiscount", required = true)
-    private Integer promotionDiscount;
-    @CsvBindByName(column = "additionalDiscount", required = true)
-    private Integer additionalDiscount;
-    @CsvBindByName(column = "skontoDiscount", required = true)
-    private Integer skontoDiscount;
-    @CsvBindByName(column = "name")
+    @ExcelCellName("name")
     private String name;
-    @CsvBindByName(column = "unitDetalPrice", required = true)
+    @ExcelCell(1)
     private Double unitDetalPrice;
+    @ExcelCellName("unit")
+    private String unit;
+    @ExcelCellName("basicDiscount")
+    private double basicDiscount;
+    @ExcelCellName("additionalDiscount")
+    private double additionalDiscount;
+    @ExcelCellName("promotionDiscount")
+    private double promotionDiscount;
+    @ExcelCellName("skonto")
+    private double skonto;
     private String manufacturer;
-
-    public Tiles() {
-    }
 
     public Long getId() {
         return id;
@@ -36,38 +36,6 @@ public class Tiles {
 
     public void setId(Long id) {
         this.id = id;
-    }
-
-    public Integer getBasicDiscount() {
-        return basicDiscount;
-    }
-
-    public void setBasicDiscount(Integer basicDiscount) {
-        this.basicDiscount = basicDiscount;
-    }
-
-    public Integer getPromotionDiscount() {
-        return promotionDiscount;
-    }
-
-    public void setPromotionDiscount(Integer promotionDiscount) {
-        this.promotionDiscount = promotionDiscount;
-    }
-
-    public Integer getAdditionalDiscount() {
-        return additionalDiscount;
-    }
-
-    public void setAdditionalDiscount(Integer additionalDiscount) {
-        this.additionalDiscount = additionalDiscount;
-    }
-
-    public Integer getSkontoDiscount() {
-        return skontoDiscount;
-    }
-
-    public void setSkontoDiscount(Integer skontoDiscount) {
-        this.skontoDiscount = skontoDiscount;
     }
 
     public String getName() {
@@ -86,31 +54,51 @@ public class Tiles {
         this.unitDetalPrice = unitDetalPrice;
     }
 
+    public String getUnit() {
+        return unit;
+    }
+
+    public void setUnit(String unit) {
+        this.unit = unit;
+    }
+
+    public double getBasicDiscount() {
+        return basicDiscount;
+    }
+
+    public void setBasicDiscount(double basicDiscount) {
+        this.basicDiscount = basicDiscount;
+    }
+
+    public double getAdditionalDiscount() {
+        return additionalDiscount;
+    }
+
+    public void setAdditionalDiscount(double additionalDiscount) {
+        this.additionalDiscount = additionalDiscount;
+    }
+
+    public double getPromotionDiscount() {
+        return promotionDiscount;
+    }
+
+    public void setPromotionDiscount(double promotionDiscount) {
+        this.promotionDiscount = promotionDiscount;
+    }
+
+    public double getSkonto() {
+        return skonto;
+    }
+
+    public void setSkonto(double skonto) {
+        this.skonto = skonto;
+    }
+
     public String getManufacturer() {
         return manufacturer;
     }
 
     public void setManufacturer(String manufacturer) {
         this.manufacturer = manufacturer;
-    }
-
-    @Override
-    public String toString() {
-//        StringBuilder builder = new StringBuilder();
-//        builder.append("Tiles{name=").append(name).append(", unitDetalPrice=")
-//                .append(unitDetalPrice).append(", basicDiscount=").append(basicDiscount)
-//                .append(", additionalDiscount=").append(additionalDiscount)
-//                .append(", promotionDiscount=").append(promotionDiscount)
-//                .append(", skontoDiscount=").append(skontoDiscount).append("}");
-//
-//        return builder.toString();
-        return "Tiles{" +
-                "name=" + name +
-                ", unitDetalPrice=" + unitDetalPrice +
-                ", basicDiscount=" + basicDiscount +
-                ", additionalDiscount=" + additionalDiscount +
-                ", promotionDiscount=" + promotionDiscount +
-                ", skontoDiscount=" + skontoDiscount +
-                '}';
     }
 }

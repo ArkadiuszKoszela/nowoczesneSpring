@@ -1,48 +1,77 @@
 package pl.koszela.nowoczesnebud.Service;
 
-import com.opencsv.bean.CsvToBeanBuilder;
+import com.poiji.bind.Poiji;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
+import pl.koszela.nowoczesnebud.Model.Accessories;
 import pl.koszela.nowoczesnebud.Model.Tiles;
 
-import java.io.FileReader;
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-
-import static pl.koszela.nowoczesnebud.EndPoint.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class ServiceCsv {
 
-    private List<Tiles> tilesList;
+    private final List<Tiles> tilesList;
+    private final List<Accessories> accessoriesList;
 
     public ServiceCsv() {
         tilesList = new ArrayList<>();
+        accessoriesList = new ArrayList<>();
     }
 
     List<Tiles> saveTiles() {
-        try {
-            readFromCSV(FILE_BOGEN_INNOVO_10_CZERWONA_ANGOBA_URL);
-            readFromCSV(FILE_TITANIA_BRAZ_GLAZ_NOBLESSE_URL);
-            readFromCSV(FILE_TITANIA_CZARNA_GLAZ_FINESSE_URL);
-            readFromCSV(FILE_BOGEN_INNOVO_10_MIEDZIANO_BRAZOWA_ANGOBA_URL);
-            readFromCSV(FILE_BOGEN_INNOVO_12_CZERWONA_ANGOBA_URL);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        readFromCSVTiles("src/main/resources/cenniki");
         return tilesList;
     }
 
-    private void readFromCSV(String filePath) throws IOException {
-        List<Tiles> tilesPathList = new CsvToBeanBuilder<Tiles>(new FileReader(filePath))
-                .withSeparator(';').withType(Tiles.class).build().parse();
-        tilesPathList.forEach(tile -> tile.setManufacturer(getManufacturer(filePath)));
-        tilesList.addAll(tilesPathList);
+    List<Accessories> saveAccessories() {
+        readFromCSVAccessories("src/main/resources/accesories");
+        return accessoriesList;
+    }
+
+    private void readFromCSVTiles(String directory) {
+
+        try (Stream<Path> walk = Files.walk(Paths.get(directory))) {
+
+            List<String> result = walk.filter(Files::isRegularFile)
+                    .map(x -> x.toString()).collect(Collectors.toList());
+
+            for (String filePath : result) {
+                List<Tiles> tilesPathList = Poiji.fromExcel(new File(filePath), Tiles.class);
+                tilesPathList.forEach(tile -> tile.setManufacturer(getManufacturer(filePath)));
+                tilesList.addAll(tilesPathList);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void readFromCSVAccessories(String directory) {
+        try (Stream<Path> walk = Files.walk(Paths.get(directory))) {
+
+            List<String> result = walk.filter(Files::isRegularFile)
+                    .map(x -> x.toString()).collect(Collectors.toList());
+
+            for (String filePath : result) {
+                List<Accessories> accessoriesPathList = Poiji.fromExcel(new File(filePath), Accessories.class);
+                accessoriesPathList.forEach(tile -> tile.setManufacturer(getManufacturer(filePath)));
+                accessoriesList.addAll(accessoriesPathList);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     private String getManufacturer(String url) {
-        String trim = StringUtils.substringAfterLast(url, "/");
+        String trim = StringUtils.substringAfterLast(url, "\\");
         return StringUtils.substringBeforeLast(trim, ".");
     }
 }
