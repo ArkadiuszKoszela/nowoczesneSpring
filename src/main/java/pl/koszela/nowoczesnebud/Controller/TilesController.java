@@ -17,8 +17,8 @@ import java.io.IOException;
 import java.util.List;
 
 @RestController
-@RequestMapping("/tiles")
-@CrossOrigin(origins = "http://localhost:4200")
+@RequestMapping("/api/tiles")
+@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
 public class TilesController {
 
     private final TilesService tilesService;

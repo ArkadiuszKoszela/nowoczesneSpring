@@ -7,8 +7,8 @@ import pl.koszela.nowoczesnebud.Repository.TilesInputRepository;
 import java.util.List;
 
 @RestController
-@RequestMapping("/input")
-@CrossOrigin(origins = "http://localhost:4200")
+@RequestMapping("/api/input")
+@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
 public class InputController {
 
     private final TilesInputRepository tilesInputRepository;

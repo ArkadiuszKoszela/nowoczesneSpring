@@ -10,8 +10,8 @@ import pl.koszela.nowoczesnebud.Service.AccessoriesService;
 import java.util.List;
 
 @RestController
-@RequestMapping("/accessories")
-@CrossOrigin(origins = "http://localhost:4200")
+@RequestMapping("/api/accessories")
+@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
 public class AccessoriesController {
 
     private AccessoriesService accessoriesService;
