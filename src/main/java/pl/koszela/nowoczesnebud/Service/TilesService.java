@@ -9,6 +9,7 @@ import pl.koszela.nowoczesnebud.Repository.TilesRepository;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,7 +25,12 @@ public class TilesService {
 
     public List<TilesDTO> getAllTiles() {
         if (CollectionUtils.isEmpty(tilesRepository.findAll())) {
+            System.out.println("START");
+            long timeStart = System.currentTimeMillis();
             tilesRepository.saveAll(serviceCsv.saveTiles());
+            long timeStop = System.currentTimeMillis();
+            long duration = timeStop - timeStart;
+            System.out.println(TimeUnit.MILLISECONDS.toSeconds(duration) + " sec");
             return convertToDTO(tilesRepository.findAll());
         }
         return convertToDTO(tilesRepository.findAll());
