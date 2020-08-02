@@ -28,12 +28,12 @@ public class ServiceCsv {
     }
 
     List<Tiles> saveTiles() {
-        readFromCSVTiles("src/main/resources/cenniki");
+        readFromCSVTiles("src/main/resources/assets/cenniki");
         return tilesList;
     }
 
     List<Accessories> saveAccessories() {
-        readFromCSVAccessories("src/main/resources/accesories");
+        readFromCSVAccessories("src/main/resources/assets/accesories");
         return accessoriesList;
     }
 
