@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -38,23 +39,20 @@ public class ServiceCsv {
     }
 
     private void readFromCSVTiles(String directory) {
-
-        try (Stream<Path> walk = Files.walk(Paths.get(directory))) {
-            walk.filter(Files::isRegularFile)
-                    .forEach(System.out::println);
-            List<String> result = walk.filter(Files::isRegularFile)
-                    .map(x -> x.toString()).collect(Collectors.toList());
+        File[] files = new File(directory).listFiles(File::isFile);
+//        try (Stream<Path> walk = Files.walk(Paths.get(directory))) {
+        Arrays.stream(files).forEach(System.out::println);
 
 
 
-            for (String filePath : result) {
-                List<Tiles> tilesPathList = Poiji.fromExcel(new File(filePath), Tiles.class);
-                tilesPathList.forEach(tile -> tile.setManufacturer(getManufacturer(filePath)));
+            for (File filePath : files) {
+                List<Tiles> tilesPathList = Poiji.fromExcel(filePath, Tiles.class);
+                tilesPathList.forEach(tile -> tile.setManufacturer(getManufacturer(filePath.getName())));
                 tilesList.addAll(tilesPathList);
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
     }
 
     private void readFromCSVAccessories(String directory) {
