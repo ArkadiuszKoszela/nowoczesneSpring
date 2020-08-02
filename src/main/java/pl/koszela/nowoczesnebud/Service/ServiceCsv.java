@@ -40,9 +40,12 @@ public class ServiceCsv {
     private void readFromCSVTiles(String directory) {
 
         try (Stream<Path> walk = Files.walk(Paths.get(directory))) {
-
+            walk.filter(Files::isRegularFile)
+                    .forEach(System.out::println);
             List<String> result = walk.filter(Files::isRegularFile)
                     .map(x -> x.toString()).collect(Collectors.toList());
+
+
 
             for (String filePath : result) {
                 List<Tiles> tilesPathList = Poiji.fromExcel(new File(filePath), Tiles.class);
