@@ -40,39 +40,25 @@ public class ServiceCsv {
 
     private void readFromCSVTiles(String directory) {
         File[] files = new File(directory).listFiles(File::isFile);
-//        try (Stream<Path> walk = Files.walk(Paths.get(directory))) {
         Arrays.stream(files).forEach(System.out::println);
-
-
-
-            for (File filePath : files) {
-                List<Tiles> tilesPathList = Poiji.fromExcel(filePath, Tiles.class);
-                tilesPathList.forEach(tile -> tile.setManufacturer(getManufacturer(filePath.getName())));
-                tilesList.addAll(tilesPathList);
-            }
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
+        for (File file : files) {
+            List<Tiles> tilesPathList = Poiji.fromExcel(file, Tiles.class);
+            tilesPathList.forEach(obj -> obj.setManufacturer(getManufacturer(file.getName())));
+            tilesList.addAll(tilesPathList);
+        }
     }
 
     private void readFromCSVAccessories(String directory) {
-        try (Stream<Path> walk = Files.walk(Paths.get(directory))) {
-
-            List<String> result = walk.filter(Files::isRegularFile)
-                    .map(x -> x.toString()).collect(Collectors.toList());
-
-            for (String filePath : result) {
-                List<Accessories> accessoriesPathList = Poiji.fromExcel(new File(filePath), Accessories.class);
-                accessoriesPathList.forEach(tile -> tile.setManufacturer(getManufacturer(filePath)));
-                accessoriesList.addAll(accessoriesPathList);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+        File[] files = new File(directory).listFiles(File::isFile);
+        Arrays.stream(files).forEach(System.out::println);
+        for (File file : files) {
+            List<Accessories> accessoriesPathList = Poiji.fromExcel(file, Accessories.class);
+            accessoriesPathList.forEach(obj -> obj.setManufacturer(getManufacturer(file.getName())));
+            accessoriesList.addAll(accessoriesPathList);
         }
     }
 
     private String getManufacturer(String url) {
-        String trim = StringUtils.substringAfterLast(url, "\\");
-        return StringUtils.substringBeforeLast(trim, ".");
+        return StringUtils.substringBeforeLast(url, ".");
     }
 }
