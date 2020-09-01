@@ -65,7 +65,9 @@ public class CreateOffer {
         for (int i = 0; i < tiles.size(); i++) {
             String currentManufacturer = tiles.get(i).getManufacturer();
             if (i <= 0 || !currentManufacturer.equalsIgnoreCase(tiles.get(i -1).getManufacturer())) {
-                table.addCell(getCell(10, WordUtils.capitalizeFully(currentManufacturer), font(11)));
+                PdfPCell cell = getCell(10, WordUtils.capitalizeFully(currentManufacturer), font(11));
+                cell.setBackgroundColor(BaseColor.GREEN);
+                table.addCell(cell);
             }
             generateManufacturer(table, tiles, i);
         }

@@ -2,30 +2,33 @@ package pl.koszela.nowoczesnebud.Model;
 
 import com.poiji.annotation.ExcelCell;
 import com.poiji.annotation.ExcelCellName;
+import org.hibernate.annotations.GenericGenerator;
 
 import javax.persistence.*;
+import java.math.BigDecimal;
 
 @Entity
 public class Tiles {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(generator = "generator")
+    @GenericGenerator(name = "generator", strategy = "increment")
+    private long id;
     @ExcelCellName("basicDiscount")
-    private Integer basicDiscount;
+    private int basicDiscount = 0;
     @ExcelCellName("promotionDiscount")
-    private Integer promotionDiscount;
+    private int promotionDiscount;
     @ExcelCellName("additionalDiscount")
-    private Integer additionalDiscount;
+    private int additionalDiscount;
     @ExcelCellName("skonto")
-    private Integer skontoDiscount;
+    private int skontoDiscount;
     @ExcelCellName("name")
     private String name;
     @ExcelCell(1)
-    private Double unitDetalPrice;
+    private BigDecimal unitDetalPrice;
     @ExcelCell(2)
-    private Double quantityConverter;
-    private Double quantity = 0.0;
+    private BigDecimal quantityConverter;
+    private double quantity = 0.0;
     private String manufacturer;
     private TotalValues totalValues;
 
@@ -36,43 +39,43 @@ public class Tiles {
         return (100 - obtained) / 100;
     }
 
-    public Long getId() {
+    public long getId() {
         return id;
     }
 
-    public void setId(Long id) {
+    public void setId(long id) {
         this.id = id;
     }
 
-    public Integer getBasicDiscount() {
+    public int getBasicDiscount() {
         return basicDiscount;
     }
 
-    public void setBasicDiscount(Integer basicDiscount) {
+    public void setBasicDiscount(int basicDiscount) {
         this.basicDiscount = basicDiscount;
     }
 
-    public Integer getPromotionDiscount() {
+    public int getPromotionDiscount() {
         return promotionDiscount;
     }
 
-    public void setPromotionDiscount(Integer promotionDiscount) {
+    public void setPromotionDiscount(int promotionDiscount) {
         this.promotionDiscount = promotionDiscount;
     }
 
-    public Integer getAdditionalDiscount() {
+    public int getAdditionalDiscount() {
         return additionalDiscount;
     }
 
-    public void setAdditionalDiscount(Integer additionalDiscount) {
+    public void setAdditionalDiscount(int additionalDiscount) {
         this.additionalDiscount = additionalDiscount;
     }
 
-    public Integer getSkontoDiscount() {
+    public int getSkontoDiscount() {
         return skontoDiscount;
     }
 
-    public void setSkontoDiscount(Integer skontoDiscount) {
+    public void setSkontoDiscount(int skontoDiscount) {
         this.skontoDiscount = skontoDiscount;
     }
 
@@ -84,12 +87,28 @@ public class Tiles {
         this.name = name;
     }
 
-    public Double getUnitDetalPrice() {
+    public BigDecimal getUnitDetalPrice() {
         return unitDetalPrice;
     }
 
-    public void setUnitDetalPrice(Double unitDetalPrice) {
+    public void setUnitDetalPrice(BigDecimal unitDetalPrice) {
         this.unitDetalPrice = unitDetalPrice;
+    }
+
+    public BigDecimal getQuantityConverter() {
+        return quantityConverter;
+    }
+
+    public void setQuantityConverter(BigDecimal quantityConverter) {
+        this.quantityConverter = quantityConverter;
+    }
+
+    public double getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(double quantity) {
+        this.quantity = quantity;
     }
 
     public String getManufacturer() {
@@ -98,6 +117,14 @@ public class Tiles {
 
     public void setManufacturer(String manufacturer) {
         this.manufacturer = manufacturer;
+    }
+
+    public TotalValues getTotalValues() {
+        return totalValues;
+    }
+
+    public void setTotalValues(TotalValues totalValues) {
+        this.totalValues = totalValues;
     }
 
     @Override
@@ -111,21 +138,5 @@ public class Tiles {
                 ", promotionDiscount=" + promotionDiscount +
                 ", skontoDiscount=" + skontoDiscount +
                 '}';
-    }
-
-    public Double getQuantityConverter() {
-        return quantityConverter;
-    }
-
-    public void setQuantityConverter(Double quantityConverter) {
-        this.quantityConverter = quantityConverter;
-    }
-
-    public Double getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(Double quantity) {
-        this.quantity = quantity;
     }
 }

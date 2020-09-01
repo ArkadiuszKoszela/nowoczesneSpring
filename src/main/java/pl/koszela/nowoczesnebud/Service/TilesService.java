@@ -1,15 +1,15 @@
 package pl.koszela.nowoczesnebud.Service;
 
+import org.apache.commons.collections.CollectionUtils;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
+import pl.koszela.nowoczesnebud.Model.TileToOffer;
 import pl.koszela.nowoczesnebud.Model.Tiles;
 import pl.koszela.nowoczesnebud.Model.TilesDTO;
 import pl.koszela.nowoczesnebud.Repository.TilesRepository;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,21 +23,22 @@ public class TilesService {
         this.serviceCsv = Objects.requireNonNull(serviceCsv);
     }
 
-    public List<TilesDTO> getAllTiles() {
+    public List<TilesDTO> getAllTilesOrCreate() {
         if (CollectionUtils.isEmpty(tilesRepository.findAll())) {
-            System.out.println("START");
-            long timeStart = System.currentTimeMillis();
-            tilesRepository.saveAll(serviceCsv.saveTiles());
-            long timeStop = System.currentTimeMillis();
-            long duration = timeStop - timeStart;
-            System.out.println(TimeUnit.MILLISECONDS.toSeconds(duration) + " sec");
-            return convertToDTO(tilesRepository.findAll());
+            List<Tiles> tiles = serviceCsv.readAndSaveTiles("src/main/resources/assets/cenniki");
+            tilesRepository.saveAll(tiles);
+            return convertTilesToDTO(tiles);
         }
-        return convertToDTO(tilesRepository.findAll());
+        return convertTilesToDTO(tilesRepository.findAll());
     }
 
-    private List<TilesDTO> convertToDTO (List<Tiles> getAll){
-        ModelMapper modelMapper = new ModelMapper();
-        return getAll.stream().map(tiles -> modelMapper.map(tiles, TilesDTO.class)).collect(Collectors.toList());
+    private List<TilesDTO> convertTilesToDTO(List<Tiles> getAll){
+        return getAll.stream()
+                .map(tiles -> new ModelMapper().map(tiles, TilesDTO.class))
+                .collect(Collectors.toList());
+    }
+
+    public List<TileToOffer> convertToTileToOffer (List<TilesDTO> tilesDTOList){
+        return tilesDTOList.stream().map(e -> new ModelMapper().map(e, TileToOffer.class)).collect(Collectors.toList());
     }
 }

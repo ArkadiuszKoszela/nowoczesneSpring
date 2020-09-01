@@ -1,17 +1,17 @@
 package pl.koszela.nowoczesnebud.Service;
 
-import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import pl.koszela.nowoczesnebud.Model.CommercialOffer;
 import pl.koszela.nowoczesnebud.Model.TileToOffer;
-import pl.koszela.nowoczesnebud.Model.TilesDTO;
 import pl.koszela.nowoczesnebud.Model.User;
 import pl.koszela.nowoczesnebud.Repository.CommercialOfferRepository;
 import pl.koszela.nowoczesnebud.Repository.TileToOfferRepository;
 import pl.koszela.nowoczesnebud.Repository.UserRepository;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class CommercialOfferService {
@@ -30,21 +30,17 @@ public class CommercialOfferService {
 
     public CommercialOffer saveUser (List<TileToOffer> tileToOffers, User user){
         List<TileToOffer> correctTiles = findCorrectTiles(tileToOffers);
-        CommercialOffer commercialOffer = new CommercialOffer(user, correctTiles);
-        userRepository.save(user);
-        tileToOfferRepository.saveAll(correctTiles);
-        return commercialOfferRepository.save(commercialOffer);
+        return commercialOfferRepository.save(new CommercialOffer(user, correctTiles));
     }
 
     private List<TileToOffer> findCorrectTiles (List<TileToOffer> tileToOfferList){
-        ModelMapper modelMapper = new ModelMapper();
         List<TileToOffer> tileToOffers = new ArrayList<>();
-        List<TilesDTO> allTiles = tilesService.getAllTiles();
+        List<TileToOffer> allTiles = tilesService.convertToTileToOffer(tilesService.getAllTilesOrCreate());
+
         for (TileToOffer tileToOffer: tileToOfferList){
-            for (TilesDTO tilesDTO: allTiles){
+            for (TileToOffer tilesDTO: allTiles){
                 if (tileToOffer.getManufacturer().equalsIgnoreCase(tilesDTO.getManufacturer())){
-                    TileToOffer tileToOffer1 = modelMapper.map(tilesDTO, TileToOffer.class);
-                    tileToOffers.add(tileToOffer1);
+                    tileToOffers.add(tilesDTO);
                 }
             }
         }

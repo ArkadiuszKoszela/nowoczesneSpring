@@ -10,6 +10,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/user")
 @CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
+//@CrossOrigin(origins = "http://localhost:4200")
 public class CommercialOfferController {
 
     private CommercialOfferService commercialOfferService;

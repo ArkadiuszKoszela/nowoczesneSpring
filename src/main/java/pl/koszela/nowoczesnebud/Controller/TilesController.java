@@ -1,24 +1,21 @@
 package pl.koszela.nowoczesnebud.Controller;
 
 import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import pl.koszela.nowoczesnebud.CreateOffer.CreateOffer;
 import pl.koszela.nowoczesnebud.Model.TilesDTO;
 import pl.koszela.nowoczesnebud.Model.TilesInput;
-import pl.koszela.nowoczesnebud.Model.User;
 import pl.koszela.nowoczesnebud.Service.QuantityService;
 import pl.koszela.nowoczesnebud.Service.TilesService;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/tiles")
 @CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
+//@CrossOrigin(origins = "http://localhost:4200")
 public class TilesController {
 
     private final TilesService tilesService;
@@ -33,13 +30,13 @@ public class TilesController {
 
     @GetMapping("/getAll")
     public List<TilesDTO> getAllTiles() {
-        return tilesService.getAllTiles();
+        return tilesService.getAllTilesOrCreate();
     }
 
     @PostMapping("/map")
     public List<TilesDTO> getTilesWithFilledQuantity(@RequestBody List<TilesInput> tilesInput){
         quantityService.filledQuantityInTiles(tilesInput);
-        return tilesService.getAllTiles();
+        return tilesService.getAllTilesOrCreate();
     }
 
     @GetMapping("/generateOffer")

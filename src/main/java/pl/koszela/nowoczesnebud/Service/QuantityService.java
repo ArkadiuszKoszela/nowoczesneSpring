@@ -34,7 +34,7 @@ public class QuantityService {
                         if (map.getKey().toLowerCase().equals(tilesInput.getName().toLowerCase())) {
                             TilesDTO tilesDTO = modelMapper.map(tile, TilesDTO.class);
                             BigDecimal inputQuantity = BigDecimal.valueOf(tilesInput.getQuantity());
-                            BigDecimal tileQuantity = BigDecimal.valueOf(tile.getQuantityConverter());
+                            BigDecimal tileQuantity = tile.getQuantityConverter();
                             double quantityFinal = inputQuantity.multiply(tileQuantity).setScale(2, RoundingMode.HALF_UP).doubleValue();
                             tile.setQuantity(quantityFinal);
                         }

@@ -1,21 +1,21 @@
 package pl.koszela.nowoczesnebud.Model;
 
 import javax.persistence.*;
-import java.util.ArrayList;
 import java.util.List;
 
 @Entity
+@Table(name = "COMMERCIAL_OFFER")
 public class CommercialOffer {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
-    @OneToOne
+    @OneToOne(targetEntity = User.class, cascade = CascadeType.ALL)
     @JoinColumn(name = "user_id")
     private User user;
-    @OneToMany
-    @JoinColumn (name = "tile_id")
-    private List<TileToOffer> tileToOffer = new ArrayList<>();
+    @OneToMany(targetEntity = TileToOffer.class, cascade = CascadeType.ALL)
+    @JoinColumn(name = "tile_to_offer_id")
+    private List<TileToOffer> tileToOffer;
 
     public CommercialOffer() {
         super();

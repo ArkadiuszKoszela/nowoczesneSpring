@@ -20,7 +20,7 @@ public class AccessoriesService {
 
     public List<Accessories> getAllAccessories() {
         if (CollectionUtils.isEmpty(accessoriesRepository.findAll())) {
-            accessoriesRepository.saveAll(serviceCsv.saveAccessories());
+            accessoriesRepository.saveAll(serviceCsv.readAndSaveAccessories("src/main/resources/assets/accessories"));
             return accessoriesRepository.findAll();
         }
         return accessoriesRepository.findAll();

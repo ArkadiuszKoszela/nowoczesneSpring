@@ -9,6 +9,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/input")
 @CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
+//@CrossOrigin(origins = "http://localhost:4200")
 public class InputController {
 
     private final TilesInputRepository tilesInputRepository;

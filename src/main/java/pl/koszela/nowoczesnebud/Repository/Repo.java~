@@ -1,0 +1,12 @@
+package pl.koszela.nowoczesnebud.Repository;
+
+import pl.koszela.nowoczesnebud.Model.Tiles;
+
+import java.util.List;
+
+public interface Repo {
+
+    int save (Tiles tiles);
+
+    int[] saveAll (List<Tiles> tilesList);
+}

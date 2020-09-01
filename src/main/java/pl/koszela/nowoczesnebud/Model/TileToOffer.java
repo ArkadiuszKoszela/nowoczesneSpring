@@ -3,6 +3,7 @@ package pl.koszela.nowoczesnebud.Model;
 import javax.persistence.*;
 
 @Entity
+@Table(name = "TILE_TO_OFFER")
 public class TileToOffer {
 
     @Id
@@ -13,6 +14,8 @@ public class TileToOffer {
     private double quantity;
     private double unitDetalPrice;
     private double quantityConverter;
+    @ManyToOne
+    private CommercialOffer commercialOffer;
 
     public TileToOffer() {
     }
@@ -63,5 +66,13 @@ public class TileToOffer {
 
     public void setQuantityConverter(double quantityConverter) {
         this.quantityConverter = quantityConverter;
+    }
+
+    public CommercialOffer getCommercialOffer() {
+        return commercialOffer;
+    }
+
+    public void setCommercialOffer(CommercialOffer commercialOffer) {
+        this.commercialOffer = commercialOffer;
     }
 }
