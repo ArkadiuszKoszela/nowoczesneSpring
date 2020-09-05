@@ -13,7 +13,7 @@ import java.util.List;
 //@CrossOrigin(origins = "http://localhost:4200")
 public class CommercialOfferController {
 
-    private CommercialOfferService commercialOfferService;
+    private final CommercialOfferService commercialOfferService;
 
     public CommercialOfferController(CommercialOfferService commercialOfferService) {
         this.commercialOfferService = commercialOfferService;
@@ -28,5 +28,4 @@ public class CommercialOfferController {
     public CommercialOffer getTilesWithMap(@RequestBody CommercialOffer commercialOffer) {
         return commercialOfferService.saveUser(commercialOffer.getTileToOffer(), commercialOffer.getUser());
     }
-
 }

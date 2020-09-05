@@ -4,6 +4,8 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import pl.koszela.nowoczesnebud.CreateOffer.CreateOffer;
+import pl.koszela.nowoczesnebud.Model.CommercialOffer;
+import pl.koszela.nowoczesnebud.Model.Tiles;
 import pl.koszela.nowoczesnebud.Model.TilesDTO;
 import pl.koszela.nowoczesnebud.Model.TilesInput;
 import pl.koszela.nowoczesnebud.Service.QuantityService;
@@ -39,9 +41,9 @@ public class TilesController {
         return tilesService.getAllTilesOrCreate();
     }
 
-    @GetMapping("/generateOffer")
-    public ResponseEntity<Object> generatePdf(@RequestParam(name = "id") long id) throws IOException {
-        createOffer.createOffer(id);
+    @PostMapping("/generateOffer")
+    public ResponseEntity<Object> generatePdf(@RequestBody CommercialOffer commercialOffer) throws IOException {
+        createOffer.createOffer(commercialOffer);
         String filename = "src/main/resources/templates/CommercialOffer.pdf";
         FileSystemResource resource = new FileSystemResource(filename);
         MediaType mediaType = MediaTypeFactory
@@ -55,5 +57,10 @@ public class TilesController {
                 .build();
         headers.setContentDisposition(disposition);
         return new ResponseEntity<>(resource, headers, HttpStatus.OK);
+    }
+
+    @GetMapping("/clear")
+    public List<Tiles> clearQuantityInTiles (){
+        return tilesService.clearQuantity();
     }
 }

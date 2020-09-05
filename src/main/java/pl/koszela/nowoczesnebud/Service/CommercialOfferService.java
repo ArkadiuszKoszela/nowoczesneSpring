@@ -33,10 +33,9 @@ public class CommercialOfferService {
         return commercialOfferRepository.save(new CommercialOffer(user, correctTiles));
     }
 
-    private List<TileToOffer> findCorrectTiles (List<TileToOffer> tileToOfferList){
+    public List<TileToOffer> findCorrectTiles (List<TileToOffer> tileToOfferList){
         List<TileToOffer> tileToOffers = new ArrayList<>();
         List<TileToOffer> allTiles = tilesService.convertToTileToOffer(tilesService.getAllTilesOrCreate());
-
         for (TileToOffer tileToOffer: tileToOfferList){
             for (TileToOffer tilesDTO: allTiles){
                 if (tileToOffer.getManufacturer().equalsIgnoreCase(tilesDTO.getManufacturer())){

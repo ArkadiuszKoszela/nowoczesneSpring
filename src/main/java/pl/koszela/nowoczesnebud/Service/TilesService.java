@@ -41,4 +41,10 @@ public class TilesService {
     public List<TileToOffer> convertToTileToOffer (List<TilesDTO> tilesDTOList){
         return tilesDTOList.stream().map(e -> new ModelMapper().map(e, TileToOffer.class)).collect(Collectors.toList());
     }
+
+    public List<Tiles> clearQuantity() {
+        List<Tiles> tilesRepositoryAll = tilesRepository.findAll();
+        tilesRepositoryAll.forEach(tile -> tile.setQuantity(0.0));
+        return tilesRepository.saveAll(tilesRepositoryAll);
+    }
 }
