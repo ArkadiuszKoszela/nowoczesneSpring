@@ -14,6 +14,9 @@ public class TileToOffer {
     private double quantity;
     private double unitDetalPrice;
     private double quantityConverter;
+    private double totalPriceAfterDiscount;
+    private double totalPriceDetal;
+    private double totalProfit;
     @ManyToOne
     private CommercialOffer commercialOffer;
 
@@ -74,5 +77,29 @@ public class TileToOffer {
 
     public void setCommercialOffer(CommercialOffer commercialOffer) {
         this.commercialOffer = commercialOffer;
+    }
+
+    public double getTotalPriceAfterDiscount() {
+        return totalPriceAfterDiscount;
+    }
+
+    public void setTotalPriceAfterDiscount(double totalPriceAfterDiscount) {
+        this.totalPriceAfterDiscount = totalPriceAfterDiscount;
+    }
+
+    public double getTotalPriceDetal() {
+        return totalPriceDetal;
+    }
+
+    public void setTotalPriceDetal(double totalPriceDetal) {
+        this.totalPriceDetal = totalPriceDetal;
+    }
+
+    public double getTotalProfit() {
+        return totalProfit;
+    }
+
+    public void setTotalProfit(double totalProfit) {
+        this.totalProfit = totalProfit;
     }
 }

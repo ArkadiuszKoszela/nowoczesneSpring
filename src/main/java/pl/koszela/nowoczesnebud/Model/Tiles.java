@@ -30,10 +30,9 @@ public class Tiles {
     private BigDecimal quantityConverter;
     private double quantity = 0.0;
     private String manufacturer;
-    private TotalValues totalValues;
-
-    public Tiles() {
-    }
+    private Double totalPriceAfterDiscount = 0.0;
+    private Double totalPriceDetal = 0.0;
+    private Double totalProfit = 0.0;
 
     private double calculatePercentage(double obtained) {
         return (100 - obtained) / 100;
@@ -119,14 +118,6 @@ public class Tiles {
         this.manufacturer = manufacturer;
     }
 
-    public TotalValues getTotalValues() {
-        return totalValues;
-    }
-
-    public void setTotalValues(TotalValues totalValues) {
-        this.totalValues = totalValues;
-    }
-
     @Override
     public String toString() {
         return "Tiles{" +
@@ -138,5 +129,29 @@ public class Tiles {
                 ", promotionDiscount=" + promotionDiscount +
                 ", skontoDiscount=" + skontoDiscount +
                 '}';
+    }
+
+    public Double getTotalPriceAfterDiscount() {
+        return totalPriceAfterDiscount;
+    }
+
+    public void setTotalPriceAfterDiscount(Double totalPriceAfterDiscount) {
+        this.totalPriceAfterDiscount = totalPriceAfterDiscount;
+    }
+
+    public Double getTotalPriceDetal() {
+        return totalPriceDetal;
+    }
+
+    public void setTotalPriceDetal(Double totalPriceDetal) {
+        this.totalPriceDetal = totalPriceDetal;
+    }
+
+    public Double getTotalProfit() {
+        return totalProfit;
+    }
+
+    public void setTotalProfit(Double totalProfit) {
+        this.totalProfit = totalProfit;
     }
 }

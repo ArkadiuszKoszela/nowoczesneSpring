@@ -44,7 +44,12 @@ public class TilesService {
 
     public List<Tiles> clearQuantity() {
         List<Tiles> tilesRepositoryAll = tilesRepository.findAll();
-        tilesRepositoryAll.forEach(tile -> tile.setQuantity(0.0));
+        tilesRepositoryAll.forEach(tile -> {
+            tile.setQuantity(0.0);
+            tile.setTotalProfit(0.0);
+            tile.setTotalPriceAfterDiscount(0.0);
+            tile.setTotalPriceDetal(0.0);
+        });
         return tilesRepository.saveAll(tilesRepositoryAll);
     }
 }

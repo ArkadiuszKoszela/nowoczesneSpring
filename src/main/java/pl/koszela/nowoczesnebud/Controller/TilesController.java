@@ -42,7 +42,7 @@ public class TilesController {
     }
 
     @PostMapping("/generateOffer")
-    public ResponseEntity<Object> generatePdf(@RequestBody CommercialOffer commercialOffer) throws IOException {
+    public ResponseEntity<Object> generatePdf(@RequestBody CommercialOffer commercialOffer) {
         createOffer.createOffer(commercialOffer);
         String filename = "src/main/resources/templates/CommercialOffer.pdf";
         FileSystemResource resource = new FileSystemResource(filename);

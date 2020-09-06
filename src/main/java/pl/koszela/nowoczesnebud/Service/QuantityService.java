@@ -1,10 +1,8 @@
 package pl.koszela.nowoczesnebud.Service;
 
-import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import pl.koszela.nowoczesnebud.Model.Mapper;
 import pl.koszela.nowoczesnebud.Model.Tiles;
-import pl.koszela.nowoczesnebud.Model.TilesDTO;
 import pl.koszela.nowoczesnebud.Model.TilesInput;
 import pl.koszela.nowoczesnebud.Repository.TilesRepository;
 
@@ -25,23 +23,47 @@ public class QuantityService {
     public void filledQuantityInTiles(List<TilesInput> tilesInputList) {
         List<Tiles> allTiles = tilesRepository.findAll();
         Mapper mapper = new Mapper();
-        ModelMapper modelMapper = new ModelMapper();
 
         for (Tiles tile : allTiles) {
             for (Map.Entry<String, String> map : mapper.getMap().entrySet()) {
-                for (TilesInput tilesInput: tilesInputList) {
-                    if (tile.getName().toLowerCase().equals(map.getValue().toLowerCase())) {
-                        if (map.getKey().toLowerCase().equals(tilesInput.getName().toLowerCase())) {
-                            TilesDTO tilesDTO = modelMapper.map(tile, TilesDTO.class);
-                            BigDecimal inputQuantity = BigDecimal.valueOf(tilesInput.getQuantity());
-                            BigDecimal tileQuantity = tile.getQuantityConverter();
-                            double quantityFinal = inputQuantity.multiply(tileQuantity).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                            tile.setQuantity(quantityFinal);
-                        }
+                for (TilesInput tilesInput : tilesInputList) {
+                    if (tile.getName().toLowerCase().equalsIgnoreCase(map.getValue().toLowerCase()) && map.getKey().toLowerCase().equalsIgnoreCase(tilesInput.getName().toLowerCase())) {
+                        tile.setQuantity(calculateQuantity(tilesInput, tile));
+                        tile.setTotalPriceDetal(calculateTotalPriceDetal(tile));
+                        tile.setTotalPriceAfterDiscount(calculateTotalPriceAfterDiscount(tile));
+                        tile.setTotalProfit(calculateTotalProfit(tile));
                     }
                 }
             }
         }
         tilesRepository.saveAll(allTiles);
     }
+
+    private double calculateTotalPriceDetal(Tiles tile) {
+        return BigDecimal.valueOf(tile.getQuantity())
+                .multiply(tile.getUnitDetalPrice()).setScale(2, RoundingMode.HALF_UP).doubleValue();
+    }
+
+    private double calculateTotalPriceAfterDiscount(Tiles tile) {
+        return BigDecimal.valueOf(tile.getTotalPriceDetal()
+                * convertPercents(tile.getBasicDiscount())
+                * convertPercents(tile.getAdditionalDiscount())
+                * convertPercents(tile.getPromotionDiscount())
+                * convertPercents(tile.getSkontoDiscount())).setScale(2, RoundingMode.HALF_UP).doubleValue();
+    }
+
+    private double calculateTotalProfit(Tiles tile) {
+        return BigDecimal.valueOf(tile.getTotalPriceDetal()
+                - tile.getTotalPriceAfterDiscount()).setScale(2, RoundingMode.HALF_UP).doubleValue();
+    }
+
+    private double convertPercents(double value) {
+        return (100 - value) / 100;
+    }
+
+    private double calculateQuantity(TilesInput tilesInput, Tiles tile) {
+        return BigDecimal.valueOf(tilesInput.getQuantity())
+                .multiply(tile.getQuantityConverter()).setScale(2, RoundingMode.HALF_UP).doubleValue();
+    }
 }
+

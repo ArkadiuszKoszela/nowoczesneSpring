@@ -7,6 +7,9 @@ public class TilesDTO {
     private double quantity;
     private double unitDetalPrice;
     private double quantityConverter;
+    private double totalPriceAfterDiscount;
+    private double totalPriceDetal;
+    private double totalProfit;
 
     public String getName() {
         return name;
@@ -46,5 +49,29 @@ public class TilesDTO {
 
     public void setQuantityConverter(double quantityConverter) {
         this.quantityConverter = quantityConverter;
+    }
+
+    public double getTotalPriceAfterDiscount() {
+        return totalPriceAfterDiscount;
+    }
+
+    public void setTotalPriceAfterDiscount(double totalPriceAfterDiscount) {
+        this.totalPriceAfterDiscount = totalPriceAfterDiscount;
+    }
+
+    public double getTotalPriceDetal() {
+        return totalPriceDetal;
+    }
+
+    public void setTotalPriceDetal(double totalPriceDetal) {
+        this.totalPriceDetal = totalPriceDetal;
+    }
+
+    public double getTotalProfit() {
+        return totalProfit;
+    }
+
+    public void setTotalProfit(double totalProfit) {
+        this.totalProfit = totalProfit;
     }
 }
