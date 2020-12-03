@@ -13,8 +13,8 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/tiles")
-//@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
-@CrossOrigin(origins = "http://192.168.0.102:4200")
+@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
+//@CrossOrigin(origins = "http://192.168.0.102:4200")
 public class TilesController {
 
     private final TilesService tilesService;
