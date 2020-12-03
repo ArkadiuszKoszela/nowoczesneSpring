@@ -8,10 +8,11 @@ import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
+import java.math.BigDecimal;
 
 @Data
 @Entity
-public class Accessories {
+public class Gutters {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -31,4 +32,6 @@ public class Accessories {
     @ExcelCellName("skonto")
     private double skonto;
     private String manufacturer;
+    @ExcelCell(2)
+    private BigDecimal quantityConverter;
 }

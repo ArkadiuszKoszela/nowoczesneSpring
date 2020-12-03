@@ -1,11 +1,13 @@
 package pl.koszela.nowoczesnebud.Model;
 
+import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
 
 import javax.persistence.*;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.Date;
 
+@Data
 @Entity
 public class User {
 
@@ -13,38 +15,14 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
     private String name;
+    private String surname;
+    @OneToOne(targetEntity = Address.class, cascade = CascadeType.ALL)
+    @JoinColumn(name = "address_id")
+    private Address address;
+    private String telephoneNumber;
+    private LocalDate dateOfMeeting;
+    private String email;
     @Temporal(TemporalType.TIMESTAMP)
     @CreatedDate
-    private Date created = new Date ();
-
-    public User() {
-    }
-
-    public User(String name) {
-        this.name = name;
-    }
-
-    public long getId() {
-        return id;
-    }
-
-    public void setId(long id) {
-        this.id = id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public Date getCreated() {
-        return created;
-    }
-
-    public void setCreated(Date created) {
-        this.created = created;
-    }
+    private Date created = new Date();
 }

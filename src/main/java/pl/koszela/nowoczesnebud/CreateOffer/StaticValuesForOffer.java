@@ -4,7 +4,6 @@ import java.time.LocalDate;
 
 public class StaticValuesForOffer {
 
-
     protected static final String OFFER_DATE = "Oferta sporządzona: " + LocalDate.now() + "\nWażna do: " + LocalDate.now().plusDays(7);
     protected static final String URL = "www.nowoczesnebudowanie.pl";
     protected static final String INFORMATION_FOR ="Informacje handlowe przygotowane dla: ";

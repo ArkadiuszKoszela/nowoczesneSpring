@@ -1,7 +1,10 @@
 package pl.koszela.nowoczesnebud.Model;
 
+import lombok.*;
+
 import javax.persistence.*;
 
+@Data
 @Entity
 @Table(name = "TILE_TO_OFFER")
 public class TileToOffer {
@@ -19,87 +22,4 @@ public class TileToOffer {
     private double totalProfit;
     @ManyToOne
     private CommercialOffer commercialOffer;
-
-    public TileToOffer() {
-    }
-
-    public long getId() {
-        return id;
-    }
-
-    public void setId(long id) {
-        this.id = id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getManufacturer() {
-        return manufacturer;
-    }
-
-    public void setManufacturer(String manufacturer) {
-        this.manufacturer = manufacturer;
-    }
-
-    public double getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(double quantity) {
-        this.quantity = quantity;
-    }
-
-    public double getUnitDetalPrice() {
-        return unitDetalPrice;
-    }
-
-    public void setUnitDetalPrice(double unitDetalPrice) {
-        this.unitDetalPrice = unitDetalPrice;
-    }
-
-    public double getQuantityConverter() {
-        return quantityConverter;
-    }
-
-    public void setQuantityConverter(double quantityConverter) {
-        this.quantityConverter = quantityConverter;
-    }
-
-    public CommercialOffer getCommercialOffer() {
-        return commercialOffer;
-    }
-
-    public void setCommercialOffer(CommercialOffer commercialOffer) {
-        this.commercialOffer = commercialOffer;
-    }
-
-    public double getTotalPriceAfterDiscount() {
-        return totalPriceAfterDiscount;
-    }
-
-    public void setTotalPriceAfterDiscount(double totalPriceAfterDiscount) {
-        this.totalPriceAfterDiscount = totalPriceAfterDiscount;
-    }
-
-    public double getTotalPriceDetal() {
-        return totalPriceDetal;
-    }
-
-    public void setTotalPriceDetal(double totalPriceDetal) {
-        this.totalPriceDetal = totalPriceDetal;
-    }
-
-    public double getTotalProfit() {
-        return totalProfit;
-    }
-
-    public void setTotalProfit(double totalProfit) {
-        this.totalProfit = totalProfit;
-    }
 }

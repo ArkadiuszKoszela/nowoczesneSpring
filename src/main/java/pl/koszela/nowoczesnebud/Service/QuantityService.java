@@ -8,8 +8,11 @@ import pl.koszela.nowoczesnebud.Repository.TilesRepository;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class QuantityService {
@@ -20,23 +23,31 @@ public class QuantityService {
         this.tilesRepository = tilesRepository;
     }
 
-    public void filledQuantityInTiles(List<TilesInput> tilesInputList) {
+    public List<Tiles> filledQuantityInTiles(List<TilesInput> tilesInputList) {
         List<Tiles> allTiles = tilesRepository.findAll();
         Mapper mapper = new Mapper();
-
+        List<Tiles> tilesToUpdate = new ArrayList<>();
         for (Tiles tile : allTiles) {
             for (Map.Entry<String, String> map : mapper.getMap().entrySet()) {
                 for (TilesInput tilesInput : tilesInputList) {
-                    if (tile.getName().toLowerCase().equalsIgnoreCase(map.getValue().toLowerCase()) && map.getKey().toLowerCase().equalsIgnoreCase(tilesInput.getName().toLowerCase())) {
+                    if (isValueToUpdate(tile, map, tilesInput)) {
                         tile.setQuantity(calculateQuantity(tilesInput, tile));
                         tile.setTotalPriceDetal(calculateTotalPriceDetal(tile));
                         tile.setTotalPriceAfterDiscount(calculateTotalPriceAfterDiscount(tile));
                         tile.setTotalProfit(calculateTotalProfit(tile));
+                        tilesToUpdate.add (tile);
                     }
                 }
             }
         }
-        tilesRepository.saveAll(allTiles);
+        tilesRepository.saveAll(tilesToUpdate);
+        return allTiles;
+    }
+
+    private boolean isValueToUpdate(Tiles tile, Map.Entry<String, String> map, TilesInput tilesInput) {
+        List<String> splitMapper = Stream.of(map.getValue().split(",")).collect(Collectors.toList());
+        boolean bool = splitMapper.stream().anyMatch(e -> tile.getName().equalsIgnoreCase(e));
+        return bool && map.getKey().toLowerCase().equalsIgnoreCase(tilesInput.getName().toLowerCase()) && tilesInput.getQuantity() != 0;
     }
 
     private double calculateTotalPriceDetal(Tiles tile) {

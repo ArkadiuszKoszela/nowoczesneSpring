@@ -5,24 +5,26 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import pl.koszela.nowoczesnebud.Model.Accessories;
+import pl.koszela.nowoczesnebud.Model.Gutters;
 import pl.koszela.nowoczesnebud.Service.AccessoriesService;
+import pl.koszela.nowoczesnebud.Service.GuttersService;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/accessories")
+@RequestMapping("/api/gutters")
 //@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
 @CrossOrigin(origins = "http://localhost:4200")
-public class AccessoriesController {
+public class GuttersController {
 
-    private AccessoriesService accessoriesService;
+    private final GuttersService guttersService;
 
-    public AccessoriesController(AccessoriesService accessoriesService) {
-        this.accessoriesService = accessoriesService;
+    public GuttersController(GuttersService guttersService) {
+        this.guttersService = guttersService;
     }
 
     @GetMapping("/getAll")
-    public List<Accessories> name() {
-        return accessoriesService.getAllAccessories();
+    public List<Gutters> getAllGutters() {
+        return guttersService.getAllGutters();
     }
 }

@@ -35,11 +35,9 @@ public class CreateOffer {
     }
 
     public void createOffer(CommercialOffer commercialOffer) {
-        if (commercialOffer.getUser().getId() != 0) {
+        if (commercialOffer.getUser().getId() != 0)
             commercialOffer = commercialOfferRepository.findByUserIdEquals(commercialOffer.getUser().getId());
-        } else {
-            commercialOffer.setTileToOffer(commercialOfferService.findCorrectTiles(commercialOffer.getTileToOffer()));
-        }
+        commercialOffer.setTileToOffer(commercialOfferService.findCorrectTiles(commercialOffer.getTileToOffer()));
         Document document = new Document();
 
         try {

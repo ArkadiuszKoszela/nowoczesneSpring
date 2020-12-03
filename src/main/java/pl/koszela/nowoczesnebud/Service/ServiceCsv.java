@@ -4,6 +4,7 @@ import com.poiji.bind.Poiji;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 import pl.koszela.nowoczesnebud.Model.Accessories;
+import pl.koszela.nowoczesnebud.Model.Gutters;
 import pl.koszela.nowoczesnebud.Model.Tiles;
 
 import java.io.File;
@@ -33,6 +34,17 @@ public class ServiceCsv {
             accessoriesPathList.forEach(obj -> obj.setManufacturer(getManufacturer(file.getName())));
         }
         return accessoriesPathList;
+    }
+
+    List<Gutters> readAndSaveGutters(String directory) {
+        File[] files = new File(directory).listFiles(File::isFile);
+        List<Gutters> guttersPathList = new ArrayList<>();
+        for (File file : files) {
+            List<Gutters> manufacturerList = Poiji.fromExcel(file, Gutters.class);
+            manufacturerList.forEach(obj -> obj.setManufacturer(getManufacturer(file.getName())));
+            guttersPathList.addAll(manufacturerList);
+        }
+        return guttersPathList;
     }
 
     private String getManufacturer(String url) {

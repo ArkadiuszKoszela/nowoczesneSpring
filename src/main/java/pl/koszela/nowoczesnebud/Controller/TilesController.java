@@ -4,10 +4,7 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import pl.koszela.nowoczesnebud.CreateOffer.CreateOffer;
-import pl.koszela.nowoczesnebud.Model.CommercialOffer;
-import pl.koszela.nowoczesnebud.Model.Tiles;
-import pl.koszela.nowoczesnebud.Model.TilesDTO;
-import pl.koszela.nowoczesnebud.Model.TilesInput;
+import pl.koszela.nowoczesnebud.Model.*;
 import pl.koszela.nowoczesnebud.Service.QuantityService;
 import pl.koszela.nowoczesnebud.Service.TilesService;
 
@@ -16,8 +13,8 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/tiles")
-@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
-//@CrossOrigin(origins = "http://localhost:4200")
+//@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
+@CrossOrigin(origins = "http://192.168.0.102:4200")
 public class TilesController {
 
     private final TilesService tilesService;
@@ -37,8 +34,7 @@ public class TilesController {
 
     @PostMapping("/map")
     public List<TilesDTO> getTilesWithFilledQuantity(@RequestBody List<TilesInput> tilesInput){
-        quantityService.filledQuantityInTiles(tilesInput);
-        return tilesService.getAllTilesOrCreate();
+        return tilesService.convertTilesToDTO (quantityService.filledQuantityInTiles(tilesInput));
     }
 
     @PostMapping("/generateOffer")
@@ -62,5 +58,10 @@ public class TilesController {
     @GetMapping("/clear")
     public List<Tiles> clearQuantityInTiles (){
         return tilesService.clearQuantity();
+    }
+
+    @GetMapping("/getInputsFromName")
+    public GroupOfTiles getGroupOfTilesWithId(@RequestParam long id) {
+        return tilesService.getInputsFromId(id);
     }
 }

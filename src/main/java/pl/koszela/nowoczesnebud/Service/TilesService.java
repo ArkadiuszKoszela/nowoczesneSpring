@@ -3,9 +3,8 @@ package pl.koszela.nowoczesnebud.Service;
 import org.apache.commons.collections.CollectionUtils;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
-import pl.koszela.nowoczesnebud.Model.TileToOffer;
-import pl.koszela.nowoczesnebud.Model.Tiles;
-import pl.koszela.nowoczesnebud.Model.TilesDTO;
+import pl.koszela.nowoczesnebud.Model.*;
+import pl.koszela.nowoczesnebud.Repository.GroupOfTilesInputRepository;
 import pl.koszela.nowoczesnebud.Repository.TilesRepository;
 
 import java.util.List;
@@ -16,23 +15,26 @@ import java.util.stream.Collectors;
 public class TilesService {
 
     private final TilesRepository tilesRepository;
+    private final GroupOfTilesInputRepository groupOfTilesInputRepository;
     private final ServiceCsv serviceCsv;
 
-    public TilesService(TilesRepository tilesRepository, ServiceCsv serviceCsv) {
+    public TilesService(TilesRepository tilesRepository, GroupOfTilesInputRepository groupOfTilesInputRepository, ServiceCsv serviceCsv) {
         this.tilesRepository = Objects.requireNonNull(tilesRepository);
+        this.groupOfTilesInputRepository = Objects.requireNonNull(groupOfTilesInputRepository);
         this.serviceCsv = Objects.requireNonNull(serviceCsv);
     }
 
     public List<TilesDTO> getAllTilesOrCreate() {
-        if (CollectionUtils.isEmpty(tilesRepository.findAll())) {
+        List<Tiles> allTiles = tilesRepository.findAll();
+        if (CollectionUtils.isEmpty(allTiles)) {
             List<Tiles> tiles = serviceCsv.readAndSaveTiles("src/main/resources/assets/cenniki");
             tilesRepository.saveAll(tiles);
             return convertTilesToDTO(tiles);
         }
-        return convertTilesToDTO(tilesRepository.findAll());
+        return convertTilesToDTO(allTiles);
     }
 
-    private List<TilesDTO> convertTilesToDTO(List<Tiles> getAll){
+    public List<TilesDTO> convertTilesToDTO(List<Tiles> getAll) {
         return getAll.stream()
                 .map(tiles -> new ModelMapper().map(tiles, TilesDTO.class))
                 .collect(Collectors.toList());
@@ -51,5 +53,13 @@ public class TilesService {
             tile.setTotalPriceDetal(0.0);
         });
         return tilesRepository.saveAll(tilesRepositoryAll);
+    }
+
+    public GroupOfTiles getInputsFromId (long id){
+        return groupOfTilesInputRepository.findGroupOfTilesById(id);
+    }
+
+    public GroupOfTiles saveGroupOfTiles(GroupOfTiles groupOfTiles) {
+        return groupOfTilesInputRepository.save(groupOfTiles);
     }
 }

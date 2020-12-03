@@ -6,7 +6,8 @@ import org.springframework.transaction.annotation.Transactional;
 import pl.koszela.nowoczesnebud.Model.Tiles;
 import pl.koszela.nowoczesnebud.Model.TilesInput;
 
-@Transactional
+import java.util.List;
+
 @Repository
 public interface TilesInputRepository extends JpaRepository<TilesInput, Long> {
 }
