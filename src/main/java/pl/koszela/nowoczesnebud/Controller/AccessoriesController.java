@@ -11,8 +11,8 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/accessories")
-//@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
-@CrossOrigin(origins = "http://localhost:4200")
+@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
+//@CrossOrigin(origins = "http://localhost:4200")
 public class AccessoriesController {
 
     private AccessoriesService accessoriesService;
