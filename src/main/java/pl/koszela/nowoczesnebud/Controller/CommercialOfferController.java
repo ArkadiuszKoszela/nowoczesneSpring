@@ -8,8 +8,8 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/commercial")
-@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
-//@CrossOrigin(origins = "http://localhost:4200")
+//@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
+@CrossOrigin(origins = "http://localhost:4200")
 public class CommercialOfferController {
 
     private final CommercialOfferService commercialOfferService;
