@@ -23,8 +23,8 @@ import java.util.zip.ZipOutputStream;
 
 @RestController
 @RequestMapping("/api/tiles")
-//@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
-@CrossOrigin(origins = "http://localhost:4200")
+@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
+//@CrossOrigin(origins = "http://localhost:4200")
 public class TilesController {
 
     private final TilesService tilesService;

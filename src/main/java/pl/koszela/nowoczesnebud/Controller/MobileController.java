@@ -6,8 +6,8 @@ import pl.koszela.nowoczesnebud.Service.UserMobileService;
 
 @RestController
 @RequestMapping("/api/mobiles")
-//@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
-@CrossOrigin(origins = "http://localhost:4200")
+@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
+//@CrossOrigin(origins = "http://localhost:4200")
 public class MobileController {
 
     private final UserMobileService userMobileService;
