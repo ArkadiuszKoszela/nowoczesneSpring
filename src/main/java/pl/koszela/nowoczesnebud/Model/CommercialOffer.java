@@ -19,7 +19,5 @@ public class CommercialOffer {
     @OneToMany(targetEntity = TileToOffer.class, cascade = CascadeType.ALL)
     @JoinColumn(name = "tile_to_offer_id")
     private List<TileToOffer> tileToOffer;
-    @ManyToOne
-    private GroupOfTiles groupOfTiles;
 
 }

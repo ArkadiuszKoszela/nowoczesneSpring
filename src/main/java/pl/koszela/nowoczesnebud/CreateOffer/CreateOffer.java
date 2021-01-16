@@ -37,7 +37,6 @@ public class CreateOffer {
     public void createOffer(CommercialOffer commercialOffer) {
         if (commercialOffer.getUser().getId() != 0)
             commercialOffer = commercialOfferRepository.findByUserIdEquals(commercialOffer.getUser().getId());
-        commercialOffer.setTileToOffer(commercialOfferService.findCorrectTiles(commercialOffer.getTileToOffer()));
         Document document = new Document();
 
         try {
@@ -90,7 +89,7 @@ public class CreateOffer {
 
     private void generateManufacturer(PdfPTable table, List<TileToOffer> tileToOfferList, int i) throws IOException, DocumentException {
         table.addCell(getCell(4, tileToOfferList.get(i).getName(), font()));
-        table.addCell(getCell(3, tileToOfferList.get(i).getQuantity() + " szt.", font()));
+//        table.addCell(getCell(3, tileToOfferList.get(i).getQuantity() + " szt.", font()));
         table.addCell(getCell(3, tileToOfferList.get(i).getUnitDetalPrice() + " zł", font()));
         table.addCell(getCell(3, tileToOfferList.get(i).getTotalPriceDetal() + " zł", font()));
         table.addCell(getCell(3, tileToOfferList.get(i).getTotalPriceAfterDiscount() + " zł", font()));

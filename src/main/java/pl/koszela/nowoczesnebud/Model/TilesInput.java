@@ -11,8 +11,6 @@ public class TilesInput {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
-    private String name;
+    private String mapperName;
     private double quantity;
-    @ManyToOne
-    private GroupOfTiles groupOfTiles;
 }

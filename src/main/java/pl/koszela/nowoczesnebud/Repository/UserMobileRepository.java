@@ -7,5 +7,5 @@ import java.util.Optional;
 
 public interface UserMobileRepository extends JpaRepository<UserMobile, Long> {
 
-    Optional<UserMobile> findByUsername (String username);
+    Optional<UserMobile> findByUsernameAndPassword (String username, String password);
 }

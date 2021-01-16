@@ -1,65 +1,79 @@
 package pl.koszela.nowoczesnebud.Service;
 
 import org.apache.commons.collections.CollectionUtils;
-import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 import pl.koszela.nowoczesnebud.Model.*;
-import pl.koszela.nowoczesnebud.Repository.GroupOfTilesInputRepository;
-import pl.koszela.nowoczesnebud.Repository.TilesRepository;
+import pl.koszela.nowoczesnebud.Repository.TileRepository;
 
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
+import java.util.Optional;
 
 @Service
 public class TilesService {
 
-    private final TilesRepository tilesRepository;
-    private final GroupOfTilesInputRepository groupOfTilesInputRepository;
+    private final TileRepository tileRepository;
     private final ServiceCsv serviceCsv;
+    private final QuantityService quantityService;
 
-    public TilesService(TilesRepository tilesRepository, GroupOfTilesInputRepository groupOfTilesInputRepository, ServiceCsv serviceCsv) {
-        this.tilesRepository = Objects.requireNonNull(tilesRepository);
-        this.groupOfTilesInputRepository = Objects.requireNonNull(groupOfTilesInputRepository);
+    public TilesService(TileRepository tileRepository, ServiceCsv serviceCsv, QuantityService quantityService) {
+        this.tileRepository = Objects.requireNonNull(tileRepository);
         this.serviceCsv = Objects.requireNonNull(serviceCsv);
+        this.quantityService = quantityService;
     }
 
-    public List<TilesDTO> getAllTilesOrCreate() {
-        List<Tiles> allTiles = tilesRepository.findAll();
+    public List<Tile> getAllTilesOrCreate() {
+        List<Tile> allTiles = tileRepository.findAll();
         if (CollectionUtils.isEmpty(allTiles)) {
-            List<Tiles> tiles = serviceCsv.readAndSaveTiles("src/main/resources/assets/cenniki");
-            tilesRepository.saveAll(tiles);
+            List<Tile> tiles = serviceCsv.readAndSaveTiles("src/main/resources/assets/cenniki");
+            tileRepository.saveAll(tiles);
             return convertTilesToDTO(tiles);
         }
         return convertTilesToDTO(allTiles);
     }
 
-    public List<TilesDTO> convertTilesToDTO(List<Tiles> getAll) {
-        return getAll.stream()
-                .map(tiles -> new ModelMapper().map(tiles, TilesDTO.class))
-                .collect(Collectors.toList());
+    public List<Tile> getAllTile(List<MultipartFile> list) throws IOException {
+        List<Tile> tiles = serviceCsv.readAndSaveTiles(list);
+        if (tiles.size() == 0)
+            return tiles;
+        tileRepository.deleteAll();
+        tileRepository.saveAll(tiles);
+        return tiles;
     }
 
-    public List<TileToOffer> convertToTileToOffer (List<TilesDTO> tilesDTOList){
-        return tilesDTOList.stream().map(e -> new ModelMapper().map(e, TileToOffer.class)).collect(Collectors.toList());
+    public List<Tile> convertTilesToDTO(List<Tile> getAll) {
+        return getAll;
     }
 
-    public List<Tiles> clearQuantity() {
-        List<Tiles> tilesRepositoryAll = tilesRepository.findAll();
-        tilesRepositoryAll.forEach(tile -> {
-            tile.setQuantity(0.0);
-            tile.setTotalProfit(0.0);
-            tile.setTotalPriceAfterDiscount(0.0);
-            tile.setTotalPriceDetal(0.0);
-        });
-        return tilesRepository.saveAll(tilesRepositoryAll);
+    public List<Tile> clearQuantity() {
+        List<Tile> tileRepositoryAll = tileRepository.findAll();
+        return tileRepository.saveAll(tileRepositoryAll);
     }
 
-    public GroupOfTiles getInputsFromId (long id){
-        return groupOfTilesInputRepository.findGroupOfTilesById(id);
+    public List<String> getTilesManufacturers() {
+        return tileRepository.findManufacturers();
     }
 
-    public GroupOfTiles saveGroupOfTiles(GroupOfTiles groupOfTiles) {
-        return groupOfTilesInputRepository.save(groupOfTiles);
+    public List<Tile> getDiscounts() {
+        return tileRepository.findDiscounts();
+    }
+
+    public List<Tile> saveDiscounts(Tile tileToSave) {
+        Optional<Tile> tile = tileRepository.findById(tileToSave.getId());
+        if (!tile.isPresent())
+            return new ArrayList<>();
+        tile.get().setBasicDiscount(tileToSave.getBasicDiscount());
+        tile.get().setAdditionalDiscount(tileToSave.getAdditionalDiscount());
+        tile.get().setPromotionDiscount(tileToSave.getPromotionDiscount());
+        tile.get().setSkontoDiscount(tileToSave.getSkontoDiscount());
+        tileRepository.save(tile.get());
+        return getDiscounts();
+    }
+
+    public List<Tile> editTypeOfTile(TypeOfTile typeOfTileToUpdate) {
+        return quantityService.setQuantity(typeOfTileToUpdate);
     }
 }

@@ -14,7 +14,6 @@ public class TileToOffer {
     private long id;
     private String name;
     private String manufacturer;
-    private double quantity;
     private double unitDetalPrice;
     private double quantityConverter;
     private double totalPriceAfterDiscount;

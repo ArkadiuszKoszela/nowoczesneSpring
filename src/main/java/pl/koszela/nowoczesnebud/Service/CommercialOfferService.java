@@ -2,12 +2,10 @@ package pl.koszela.nowoczesnebud.Service;
 
 import org.springframework.stereotype.Service;
 import pl.koszela.nowoczesnebud.Model.CommercialOffer;
-import pl.koszela.nowoczesnebud.Model.TileToOffer;
 import pl.koszela.nowoczesnebud.Repository.CommercialOfferRepository;
 
 import javax.transaction.Transactional;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.List;
 
 @Service
 public class CommercialOfferService {
@@ -22,18 +20,8 @@ public class CommercialOfferService {
 
     @Transactional
     public CommercialOffer save (CommercialOffer commercialOffer){
-        tilesService.saveGroupOfTiles(commercialOffer.getGroupOfTiles());
+//        tilesService.saveGroupOfTiles(commercialOffer.getGroupOfTiles());
         return commercialOfferRepository.save(commercialOffer);
-    }
-
-    public List<TileToOffer> findCorrectTiles (List<TileToOffer> tileToOfferList){
-        List<TileToOffer> allTiles = tilesService.convertToTileToOffer(tilesService.getAllTilesOrCreate());
-        Set<String> manufacturerNames = tileToOfferList.stream()
-                        .map(TileToOffer::getManufacturer)
-                        .collect(Collectors.toSet());
-        return allTiles.stream()
-                        .filter(e -> manufacturerNames.contains(e.getManufacturer()))
-                        .collect(Collectors.toList());
     }
 
     public List<CommercialOffer> getCommercialOffers() {
