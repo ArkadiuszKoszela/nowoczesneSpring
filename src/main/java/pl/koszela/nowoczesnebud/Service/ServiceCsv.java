@@ -35,6 +35,8 @@ public class ServiceCsv {
             tile.getGroupOfTileList().add(groupOfTile);
 
             i.remove();
+            file.delete();
+            System.out.println("Delete file - " + file.getName());
             boolean hasAnyMore = li.stream().anyMatch(e -> getManufacturer(e.getOriginalFilename()).equalsIgnoreCase(getManufacturer(file.getName())));
             if (!hasAnyMore) {
                 tilePathList.add(tile);
@@ -147,9 +149,11 @@ public class ServiceCsv {
     private File convertMultiPartToFile(MultipartFile file ) throws IOException
     {
         File convFile = new File( file.getOriginalFilename() );
+        convFile.createNewFile();
         FileOutputStream fos = new FileOutputStream( convFile );
         fos.write( file.getBytes() );
         fos.close();
+        System.out.println("Create file - " + convFile.getName());
         return convFile;
     }
 }
