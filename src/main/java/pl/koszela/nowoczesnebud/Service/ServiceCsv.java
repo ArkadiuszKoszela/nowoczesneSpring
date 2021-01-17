@@ -9,6 +9,7 @@ import pl.koszela.nowoczesnebud.Model.*;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.*;
 
 @Service
@@ -20,25 +21,26 @@ public class ServiceCsv {
         Tile tile = new Tile();
         List<MultipartFile> li = new ArrayList<>(list);
         Iterator<MultipartFile> i = li.iterator();
-        System.setProperty("sun.jnu.encoding", "UTF-8");
 
         while (i.hasNext()) {
-            File file = convertMultiPartToFile (i.next());
+            MultipartFile multipartFile = i.next();
+            File file = convertMultiPartToFile (multipartFile);
+            String fileName = multipartFile.getOriginalFilename();
             List<TypeOfTile> typeOfTileList = Poiji.fromExcel(file, TypeOfTile.class);
             List<Tile> tiles = Poiji.fromExcel(file, Tile.class);
             Optional<Tile> opt = tiles.stream().findFirst();
             if (!opt.isPresent())
                 continue;
 
-            tile.setManufacturer(getManufacturer(file.getName()));
+            tile.setManufacturer(getManufacturer(fileName));
             setDiscounts (opt.get(), tile);
-            GroupOfTile groupOfTile = new GroupOfTile(getTypeOfTile(file.getName()), typeOfTileList);
+            GroupOfTile groupOfTile = new GroupOfTile(getTypeOfTile(fileName), typeOfTileList);
             tile.getGroupOfTileList().add(groupOfTile);
 
             i.remove();
+            boolean hasAnyMore = li.stream().anyMatch(e -> getManufacturer(e.getOriginalFilename()).equalsIgnoreCase(getManufacturer(fileName)));
             if (file.delete());
-                System.out.println("Delete file - " + file.getName());
-            boolean hasAnyMore = li.stream().anyMatch(e -> getManufacturer(e.getOriginalFilename()).equalsIgnoreCase(getManufacturer(file.getName())));
+            System.out.println("Delete file - " + file.getName());
             if (!hasAnyMore) {
                 tilePathList.add(tile);
                 tile = new Tile();
@@ -149,8 +151,7 @@ public class ServiceCsv {
 
     private File convertMultiPartToFile(MultipartFile file ) throws IOException
     {
-        File convFile = new File( file.getOriginalFilename() );
-        convFile.createNewFile();
+        File convFile = File.createTempFile("tmp", ".xlsx");
         FileOutputStream fos = new FileOutputStream( convFile );
         fos.write( file.getBytes() );
         fos.close();
