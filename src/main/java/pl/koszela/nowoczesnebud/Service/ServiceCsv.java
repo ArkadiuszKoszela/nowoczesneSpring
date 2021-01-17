@@ -20,7 +20,7 @@ public class ServiceCsv {
         Tile tile = new Tile();
         List<MultipartFile> li = new ArrayList<>(list);
         Iterator<MultipartFile> i = li.iterator();
-        System.setProperty("file.encoding", "UTF-8");
+        System.setProperty("sun.jnu.encoding", "UTF-8");
 
         while (i.hasNext()) {
             File file = convertMultiPartToFile (i.next());
