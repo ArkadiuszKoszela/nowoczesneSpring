@@ -7,10 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import pl.koszela.nowoczesnebud.CreateOffer.CreateOffer;
 import pl.koszela.nowoczesnebud.Model.*;
-import pl.koszela.nowoczesnebud.Service.ExcelExporter;
-import pl.koszela.nowoczesnebud.Service.QuantityService;
-import pl.koszela.nowoczesnebud.Service.ServiceCsv;
-import pl.koszela.nowoczesnebud.Service.TilesService;
+import pl.koszela.nowoczesnebud.Service.*;
 
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
@@ -29,16 +26,21 @@ public class TilesController {
 
     private final TilesService tilesService;
     private final QuantityService quantityService;
+    private final InputService inputService;
     private final CreateOffer createOffer;
     private final ExcelExporter excelExporter;
-    private final ServiceCsv serviceCsv;
 
-    public TilesController(TilesService tilesService, QuantityService quantityService, CreateOffer createOffer, ExcelExporter excelExporter, ServiceCsv serviceCsv) {
+    public TilesController(TilesService tilesService, QuantityService quantityService, InputService inputService, CreateOffer createOffer, ExcelExporter excelExporter) {
         this.tilesService = tilesService;
         this.quantityService = quantityService;
+        this.inputService = inputService;
         this.createOffer = createOffer;
         this.excelExporter = excelExporter;
-        this.serviceCsv = serviceCsv;
+    }
+
+    @PostMapping("/saveInputs")
+    public List<Input> saveInputList (@RequestBody List<Input> inputList) {
+        return inputService.saveInputList(inputList);
     }
 
     @GetMapping("/getAll")
@@ -46,14 +48,24 @@ public class TilesController {
         return tilesService.getAllTilesOrCreate();
     }
 
+    @GetMapping("/productGroups")
+    public List<ProductGroup> getProductGroups(@RequestParam ("id") long id) {
+        return tilesService.getProductGroups(id);
+    }
+
+    @GetMapping("/productTypes")
+    public List<ProductType> getProductTypes(@RequestParam ("id") long id) {
+        return tilesService.getProductTypes(id);
+    }
+
     @PostMapping("/map")
-    public List<Tile> getTilesWithFilledQuantity(@RequestBody List<TilesInput> tilesInput){
-        return tilesService.convertTilesToDTO (quantityService.filledQuantityInTiles(tilesInput));
+    public List<Tile> getTilesWithFilledQuantity(@RequestBody List<Input> input){
+        return tilesService.convertTilesToDTO (quantityService.filledQuantityInTiles(input));
     }
 
     @PostMapping("/generateOffer")
-    public ResponseEntity<Object> generatePdf(@RequestBody CommercialOffer commercialOffer) {
-        createOffer.createOffer(commercialOffer);
+    public ResponseEntity<Object> generatePdf(@RequestBody Offer offer) {
+        createOffer.createOffer(offer);
         String filename = "src/main/resources/templates/CommercialOffer.pdf";
         FileSystemResource resource = new FileSystemResource(filename);
         MediaType mediaType = MediaTypeFactory
@@ -74,11 +86,6 @@ public class TilesController {
         return tilesService.clearQuantity();
     }
 
-//    @GetMapping("/getInputsFromName")
-//    public GroupOfTiles getGroupOfTilesWithId(@RequestParam long id) {
-//        return tilesService.getInputsFromId(id);
-//    }
-
     @GetMapping("getManufacturers")
     public List<String> getManufacturers () {
         return tilesService.getTilesManufacturers ();
@@ -95,8 +102,8 @@ public class TilesController {
     }
 
     @PostMapping("/editTypeOfTile")
-    public List<Tile> editTypeOfTile (@RequestBody TypeOfTile typeOfTile) {
-        return tilesService.editTypeOfTile(typeOfTile);
+    public DTO editTypeOfTile (@RequestBody DTO dto) {
+        return tilesService.editTypeOfTile(dto);
     }
 
     @GetMapping(value="/export/excel", produces="application/zip")
@@ -132,5 +139,12 @@ public class TilesController {
         List<Tile> list = tilesService.getAllTile(array);
         return list;
     }
+
+    @PostMapping("/setOption")
+    public ProductGroup setOption (@RequestBody ProductGroup updateProductGroup) {
+        return tilesService.setOption(updateProductGroup);
+    }
+
+
 
 }

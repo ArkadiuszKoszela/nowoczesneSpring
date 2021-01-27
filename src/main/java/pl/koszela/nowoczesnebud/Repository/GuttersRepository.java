@@ -11,6 +11,6 @@ import java.util.List;
 public interface GuttersRepository extends JpaRepository<Gutter, Long> {
 
     @Query(value = "SELECT id, basic_discount, promotion_discount, additional_discount, skonto_discount, manufacturer " +
-            "FROM gutters", nativeQuery = true)
+            "FROM gutter", nativeQuery = true)
     List<Gutter> findDiscounts();
 }

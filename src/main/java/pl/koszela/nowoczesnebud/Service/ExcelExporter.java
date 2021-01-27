@@ -7,10 +7,9 @@ import org.apache.poi.xssf.usermodel.XSSFFont;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
-import pl.koszela.nowoczesnebud.Model.GroupOfTile;
+import pl.koszela.nowoczesnebud.Model.ProductGroup;
+import pl.koszela.nowoczesnebud.Model.ProductType;
 import pl.koszela.nowoczesnebud.Model.Tile;
-import pl.koszela.nowoczesnebud.Model.TypeOfTile;
-import pl.koszela.nowoczesnebud.Repository.TileRepository;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -74,7 +73,7 @@ public class ExcelExporter {
         cell.setCellStyle(style);
     }
 
-    private XSSFWorkbook writeDataLines(Tile tile, GroupOfTile groupOfTile) {
+    private XSSFWorkbook writeDataLines(Tile tile, ProductGroup productGroup) {
         int rowCount = 1;
 
         CellStyle style = workbook.createCellStyle();
@@ -83,16 +82,16 @@ public class ExcelExporter {
         style.setFont(font);
 
         int columnCount = 0;
-        for (TypeOfTile typeOfTile: groupOfTile.getTypeOfTileList()) {
+        for (ProductType productType : productGroup.getProductTypeList()) {
             Row row = sheet.createRow(rowCount++);
-            createCell(row, columnCount++, typeOfTile.getName(), style);
-            createCell(row, columnCount++, typeOfTile.getUnitDetalPrice(), style);
-            createCell(row, columnCount++, typeOfTile.getQuantityConverter(), style);
+            createCell(row, columnCount++, productType.getName(), style);
+            createCell(row, columnCount++, productType.getUnitDetalPrice(), style);
+            createCell(row, columnCount++, productType.getQuantityConverter(), style);
             createCell(row, columnCount++, tile.getBasicDiscount(), style);
             createCell(row, columnCount++, tile.getAdditionalDiscount(), style);
             createCell(row, columnCount++, tile.getPromotionDiscount(), style);
             createCell(row, columnCount++, tile.getSkontoDiscount(), style);
-            createCell(row, columnCount++, typeOfTile.getMapperName(), style);
+            createCell(row, columnCount++, productType.getMapperName(), style);
             createCell(row, columnCount++, "", style);
             columnCount = 0;
         }
@@ -100,11 +99,11 @@ public class ExcelExporter {
         return workbook;
     }
 
-    public File export(Tile tile, GroupOfTile groupOfTile) throws IOException {
+    public File export(Tile tile, ProductGroup productGroup) throws IOException {
         writeHeaderLine();
 
-        writeDataLines(tile, groupOfTile);
-        File file = new File(tile.getManufacturer() + "-" + groupOfTile.getTypeOfTileName() + ".xlsx");
+        writeDataLines(tile, productGroup);
+        File file = new File(tile.getManufacturer() + "-" + productGroup.getTypeName() + ".xlsx");
         FileOutputStream outputStream = new FileOutputStream(file);
 
         workbook.write(outputStream);
@@ -119,8 +118,8 @@ public class ExcelExporter {
         List<Tile> tileList = tilesService.getAllTilesOrCreate();
         List<File> fileList = new ArrayList<>();
         for (Tile tile : tileList) {
-            for (GroupOfTile groupOfTile : tile.getGroupOfTileList()) {
-                    fileList.add(export(tile, groupOfTile));
+            for (ProductGroup productGroup : tile.getProductGroupList()) {
+                    fileList.add(export(tile, productGroup));
             }
         }
         return fileList;

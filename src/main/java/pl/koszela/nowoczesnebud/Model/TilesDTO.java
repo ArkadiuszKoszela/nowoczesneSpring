@@ -9,7 +9,7 @@ public class TilesDTO {
 
     private String manufacturer;
     private String typeOfTileName;
-    private List<TypeOfTile> typeOfTileList;
+    private List<ProductType> productTypeList;
     private double quantity;
     private double unitDetalPrice;
     private double quantityConverter;

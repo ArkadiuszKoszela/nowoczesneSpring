@@ -1,5 +1,6 @@
 package pl.koszela.nowoczesnebud.Model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.poiji.annotation.ExcelCellName;
 import lombok.Data;
 import org.hibernate.annotations.GenericGenerator;
@@ -27,7 +28,8 @@ public class Gutter {
     @ExcelCellName("skonto")
     private int skontoDiscount;
 
-    @OneToMany(targetEntity = GroupOfTile.class, cascade = CascadeType.ALL)
+    @OneToMany(targetEntity = ProductGroup.class, fetch = FetchType.LAZY)
     @JoinColumn(name = "gutter_id")
-    List<GroupOfTile> groupOfTileList = new ArrayList<>();
+    @JsonIgnore
+    List<ProductGroup> productGroupList = new ArrayList<>();
 }

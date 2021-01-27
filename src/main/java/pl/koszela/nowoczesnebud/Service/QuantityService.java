@@ -2,139 +2,142 @@ package pl.koszela.nowoczesnebud.Service;
 
 import org.springframework.stereotype.Service;
 import pl.koszela.nowoczesnebud.Model.*;
-import pl.koszela.nowoczesnebud.Repository.GroupOfTileRepository;
-import pl.koszela.nowoczesnebud.Repository.GuttersRepository;
-import pl.koszela.nowoczesnebud.Repository.TileRepository;
-import pl.koszela.nowoczesnebud.Repository.TypeOfTileRepository;
+import pl.koszela.nowoczesnebud.Repository.*;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 public class QuantityService {
 
-    private final TypeOfTileRepository typeOfTileRepository;
-    private final GroupOfTileRepository groupOfTileRepository;
-    private final TileRepository tileRepository;
-    private final GuttersRepository guttersRepository;
+    private final ProductTypeRepository productTypeRepository;
+    private final ProductGroupRepository productGroupRepository;
+    private final TilesService tilesService;
+    private final GuttersService guttersService;
 
-    public QuantityService(TypeOfTileRepository typeOfTileRepository, GroupOfTileRepository groupOfTileRepository, TileRepository tileRepository, GuttersRepository guttersRepository) {
-        this.typeOfTileRepository = typeOfTileRepository;
-        this.groupOfTileRepository = groupOfTileRepository;
-        this.tileRepository = tileRepository;
-        this.guttersRepository = guttersRepository;
+    public QuantityService(ProductTypeRepository productTypeRepository, ProductGroupRepository productGroupRepository, TilesService tilesService, GuttersService guttersService) {
+        this.productTypeRepository = productTypeRepository;
+        this.productGroupRepository = productGroupRepository;
+        this.tilesService = tilesService;
+        this.guttersService = guttersService;
     }
 
-    public List<Tile> filledQuantityInTiles(List<TilesInput> tilesInputList) {
-        List<TypeOfTile> typeOfTileList = typeOfTileRepository.findAll();
-        List<TypeOfTile> typeOfTilesToUpdate = new ArrayList<>();
-        for (TypeOfTile typeOfTile : typeOfTileList) {
-                for (TilesInput tilesInput : tilesInputList) {
-                    double quantityToSet = tilesInput.getQuantity();
-                    String mapperValue = tilesInput.getMapperName();
-                    String mapper = typeOfTile.getMapperName();
+    public List<Tile> filledQuantityInTiles(List<Input> inputList) {
+        List<ProductType> productTypeList = productTypeRepository.findAll();
+        List<ProductType> productTypeOfTilesToUpdate = new ArrayList<>();
+        for (ProductType productType : productTypeList) {
+                for (Input input : inputList) {
+                    double quantityToSet = input.getQuantity();
+                    String mapperValue = input.getMapperName();
+                    String mapper = productType.getMapperName();
                     if (mapperValue.equalsIgnoreCase(mapper))
-                        calculateQuantity (typeOfTile, quantityToSet);
-                    typeOfTilesToUpdate.add (typeOfTile);
+                        calculateQuantity (productType, quantityToSet);
+                    productTypeOfTilesToUpdate.add (productType);
             }
         }
-        typeOfTileRepository.saveAll(typeOfTilesToUpdate);
+        productTypeRepository.saveAll(productTypeOfTilesToUpdate);
 
-        List<Tile> allTiles =  tileRepository.findAll();
+        List<Tile> allTiles = tilesService.getAllTiles ();
 
         for (Tile tile : allTiles) {
-            for (GroupOfTile groupOfTile : tile.getGroupOfTileList()) {
-                double sumPrice = groupOfTile.getTypeOfTileList().stream().mapToDouble(TypeOfTile::getPrice).sum();
-                groupOfTile.setTotalPriceDetal(BigDecimal.valueOf(sumPrice).setScale(2, RoundingMode.HALF_UP).doubleValue());
-                groupOfTile.setTotalPriceAfterDiscount(calculateTotalPriceAfterDiscount(sumPrice, tile));
-                groupOfTile.setTotalProfit(calculateTotalProfit(groupOfTile));
+            for (ProductGroup productGroup : tile.getProductGroupList()) {
+                double sumPrice = productGroup.getProductTypeList().stream().mapToDouble(
+                        productType -> productType.getPrice() * productType.getQuantity()).sum();
+                double sumDetalPrice = productGroup.getProductTypeList().stream().mapToDouble(
+                        productType -> BigDecimal.valueOf(productType.getUnitDetalPrice().doubleValue() * productType.getQuantity()).setScale(2, RoundingMode.HALF_UP).doubleValue()).sum();
+                productGroup.setTotalPriceDetal(BigDecimal.valueOf(sumDetalPrice).setScale(2, RoundingMode.HALF_UP).doubleValue());
+                productGroup.setTotalPriceAfterDiscount(sumPrice);
+                productGroup.setTotalProfit(calculateTotalProfit(productGroup));
             }
         }
-
-        return tileRepository.saveAll(allTiles);
+        return tilesService.saveAllTiles(allTiles);
     }
 
-    public List<Gutter> filledQuantityInGutters(List<TilesInput> tilesInputList) {
-        List<TypeOfTile> typeOfTileList = typeOfTileRepository.findAll();
-        List<TypeOfTile> typeOfTilesToUpdate = new ArrayList<>();
-        for (TypeOfTile typeOfTile : typeOfTileList) {
-            for (TilesInput tilesInput : tilesInputList) {
-                double quantityToSet = tilesInput.getQuantity();
-                String mapperValue = tilesInput.getMapperName();
-                String mapper = typeOfTile.getMapperName();
+    public List<Gutter> filledQuantityInGutters(List<Input> inputList) {
+        List<ProductType> productTypeList = productTypeRepository.findAll();
+        List<ProductType> productTypeOfTilesToUpdate = new ArrayList<>();
+        for (ProductType productType : productTypeList) {
+            for (Input input : inputList) {
+                double quantityToSet = input.getQuantity();
+                String mapperValue = input.getMapperName();
+                String mapper = productType.getMapperName();
                 if (mapperValue.equalsIgnoreCase(mapper))
-                    calculateQuantity (typeOfTile, quantityToSet);
-                typeOfTilesToUpdate.add (typeOfTile);
+                    calculateQuantity (productType, quantityToSet);
+                productTypeOfTilesToUpdate.add (productType);
             }
         }
-        typeOfTileRepository.saveAll(typeOfTilesToUpdate);
+        productTypeRepository.saveAll(productTypeOfTilesToUpdate);
 
-        List<Gutter> allGuters =  guttersRepository.findAll();
+        List<Gutter> allGutters = guttersService.getAllGutters();
 
-        for (Gutter gutter : allGuters) {
-            for (GroupOfTile groupOfTile : gutter.getGroupOfTileList()) {
-                double sumPrice = groupOfTile.getTypeOfTileList().stream().mapToDouble(TypeOfTile::getPrice).sum();
-                groupOfTile.setTotalPriceDetal(BigDecimal.valueOf(sumPrice).setScale(2, RoundingMode.HALF_UP).doubleValue());
-                groupOfTile.setTotalPriceAfterDiscount(calculateTotalPriceAfterDiscount(sumPrice, gutter));
-                groupOfTile.setTotalProfit(calculateTotalProfit(groupOfTile));
-            }
-        }
-
-        return guttersRepository.saveAll(allGuters);
-    }
-
-    public List<Tile> setQuantity (TypeOfTile typeOfTileToUpdate) {
-        Optional<TypeOfTile> typeOfTile = typeOfTileRepository.findById(typeOfTileToUpdate.getId());
-        if (!typeOfTile.isPresent())
-            return new ArrayList<>();
-        typeOfTile.get().setQuantity(typeOfTileToUpdate.getQuantity());
-        BigDecimal price = BigDecimal.valueOf(typeOfTile.get().getQuantity() * typeOfTile.get().getUnitDetalPrice().doubleValue());
-        typeOfTile.get().setPrice(price.setScale(2 ,RoundingMode.HALF_UP).doubleValue());
-
-        typeOfTileRepository.save(typeOfTile.get());
-        long idGroupOfTile = typeOfTileRepository.findIdGroupOfType(typeOfTileToUpdate.getId());
-        Optional<GroupOfTile> groupOfTile = groupOfTileRepository.findById(idGroupOfTile);
-        if (!groupOfTile.isPresent()) {
-            return new ArrayList<>();
-        }
-        long tileId = groupOfTileRepository.findIdTile(groupOfTile.get().getId());
-        Optional<Tile> tile = tileRepository.findById(tileId);
-
-        double sumPrice = groupOfTile.get().getTypeOfTileList().stream().mapToDouble(TypeOfTile::getPrice).sum();
-        groupOfTile.get().setTotalPriceDetal(BigDecimal.valueOf(sumPrice).setScale(2, RoundingMode.HALF_UP).doubleValue());
-        groupOfTile.get().setTotalPriceAfterDiscount(calculateTotalPriceAfterDiscount(sumPrice, tile.get()));
-        groupOfTile.get().setTotalProfit(calculateTotalProfit(groupOfTile.get()));
-
-        for (GroupOfTile groupOfTile1 :tile.get().getGroupOfTileList()) {
-            if (groupOfTile1.getId() == groupOfTile.get().getId()) {
-                groupOfTile1 = groupOfTile.get();
+        for (Gutter gutter : allGutters) {
+            for (ProductGroup productGroup : gutter.getProductGroupList()) {
+                double sumPrice = productGroup.getProductTypeList().stream().mapToDouble(
+                        productType -> productType.getPrice() * productType.getQuantity()).sum();
+                double sumDetalPrice = productGroup.getProductTypeList().stream().mapToDouble(
+                        productType -> BigDecimal.valueOf(productType.getUnitDetalPrice().doubleValue() * productType.getQuantity()).setScale(2, RoundingMode.HALF_UP).doubleValue()).sum();
+                productGroup.setTotalPriceDetal(BigDecimal.valueOf(sumDetalPrice).setScale(2, RoundingMode.HALF_UP).doubleValue());
+                productGroup.setTotalPriceAfterDiscount(sumPrice);
+                productGroup.setTotalProfit(calculateTotalProfit(productGroup));
             }
         }
 
-        tileRepository.save(tile.get());
-        return tileRepository.findAll();
+        return guttersService.saveAll(allGutters);
     }
 
-    private double calculateTotalPriceAfterDiscount(double sumPrice, Tile tile) {
-        return BigDecimal.valueOf(sumPrice
-                * convertPercents(tile.getBasicDiscount())
-                * convertPercents(tile.getAdditionalDiscount())
-                * convertPercents(tile.getPromotionDiscount())
-                * convertPercents(tile.getSkontoDiscount())).setScale(2, RoundingMode.HALF_UP).doubleValue();
+    public DTO setQuantity (DTO dto, Tile tile) {
+        BigDecimal price = calculatePriceAfterDiscount (dto.getProductType().getUnitDetalPrice(),
+                tile.getBasicDiscount(),
+                tile.getAdditionalDiscount(), tile.getPromotionDiscount(), tile.getSkontoDiscount());
+        dto.getProductType().setPrice(price.doubleValue());
+
+        productTypeRepository.save(dto.getProductType());
+        Optional<ProductGroup> productGroup = productGroupRepository.findById(dto.getProductGroup().getId());
+        if (!productGroup.isPresent())
+            return null;
+        dto.getProductGroup().setProductTypeList(productGroup.get().getProductTypeList());
+
+        double sumPrice = dto.getProductGroup().getProductTypeList().stream().mapToDouble(
+                productType -> productType.getPrice() * productType.getQuantity()).sum();
+        double sumDetalPrice = dto.getProductGroup().getProductTypeList().stream().mapToDouble(
+                productType -> BigDecimal.valueOf(productType.getUnitDetalPrice().doubleValue() * productType.getQuantity()).setScale(2, RoundingMode.HALF_UP).doubleValue()).sum();
+        dto.getProductGroup().setTotalPriceDetal(BigDecimal.valueOf(sumDetalPrice).setScale(2, RoundingMode.HALF_UP).doubleValue());
+        dto.getProductGroup().setTotalPriceAfterDiscount(sumPrice);
+        dto.getProductGroup().setTotalProfit(calculateTotalProfit(dto.getProductGroup()));
+
+        productGroupRepository.save(dto.getProductGroup());
+        return dto;
     }
 
-    private double calculateTotalPriceAfterDiscount(double sumPrice, Gutter gutter) {
-        return BigDecimal.valueOf(sumPrice
-                * convertPercents(gutter.getBasicDiscount())
-                * convertPercents(gutter.getAdditionalDiscount())
-                * convertPercents(gutter.getPromotionDiscount())
-                * convertPercents(gutter.getSkontoDiscount())).setScale(2, RoundingMode.HALF_UP).doubleValue();
+    public DTO setQuantity (DTO dto, Gutter gutter) {
+        BigDecimal price = calculatePriceAfterDiscount (dto.getProductType().getUnitDetalPrice(),
+                gutter.getBasicDiscount(),
+                gutter.getAdditionalDiscount(), gutter.getPromotionDiscount(), gutter.getSkontoDiscount());
+        dto.getProductType().setPrice(price.doubleValue());
+
+        productTypeRepository.save(dto.getProductType());
+        Optional<ProductGroup> productGroup = productGroupRepository.findById(dto.getProductGroup().getId());
+        if (!productGroup.isPresent())
+            return null;
+        dto.getProductGroup().setProductTypeList(productGroup.get().getProductTypeList());
+
+        double sumPrice = dto.getProductGroup().getProductTypeList().stream().mapToDouble(
+                productType -> productType.getPrice() * productType.getQuantity()).sum();
+        dto.getProductGroup().setTotalPriceDetal(BigDecimal.valueOf(sumPrice).setScale(2, RoundingMode.HALF_UP).doubleValue());
+        dto.getProductGroup().setTotalPriceAfterDiscount(sumPrice);
+        dto.getProductGroup().setTotalProfit(calculateTotalProfit(dto.getProductGroup()));
+
+        productGroupRepository.save(dto.getProductGroup());
+        return dto;
     }
 
-    private double calculateTotalProfit(GroupOfTile tile) {
+    public BigDecimal calculatePriceAfterDiscount(BigDecimal price, int discount1, int discount2, int discount3, int discount4) {
+        int sumDiscounts = discount1 + discount2 + discount3 + discount4;
+        return price.multiply(BigDecimal.valueOf(convertPercents(sumDiscounts))).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private double calculateTotalProfit(ProductGroup tile) {
         return BigDecimal.valueOf(tile.getTotalPriceDetal()
                 - tile.getTotalPriceAfterDiscount()).setScale(2, RoundingMode.HALF_UP).doubleValue();
     }
@@ -143,12 +146,12 @@ public class QuantityService {
         return (100 - value) / 100;
     }
 
-    private void calculateQuantity(TypeOfTile typeOfTile, double valueToSet) {
+    private void calculateQuantity(ProductType productType, double valueToSet) {
         double quantity = BigDecimal.valueOf(valueToSet)
-                .multiply(typeOfTile.getQuantityConverter()).setScale(2, RoundingMode.HALF_UP).doubleValue();
-        typeOfTile.setQuantity(quantity);
-        double price = BigDecimal.valueOf(quantity).multiply(typeOfTile.getUnitDetalPrice()).setScale(2, RoundingMode.HALF_UP).doubleValue();
-        typeOfTile.setPrice(price);
+                .multiply(productType.getQuantityConverter()).setScale(2, RoundingMode.HALF_UP).doubleValue();
+        productType.setQuantity(quantity);
+        double price = BigDecimal.valueOf(quantity).multiply(productType.getUnitDetalPrice()).setScale(2, RoundingMode.HALF_UP).doubleValue();
+        productType.setPrice(price);
     }
 }
 

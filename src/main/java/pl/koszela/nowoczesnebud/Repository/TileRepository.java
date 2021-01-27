@@ -19,7 +19,6 @@ public interface TileRepository extends JpaRepository<Tile, Long> {
             "FROM tile", nativeQuery = true)
     List<Tile> findDiscounts();
 
-    @Query (value = "SELECT * from tile where  " +
-            "FROM tile", nativeQuery = true)
-    Tile findTileByGroupId (@Param("id") long id);
+    @Query (value = "SELECT * FROM tile WHERE id = :id", nativeQuery = true)
+    Tile findTileByProductGroupId (@Param("id") long id);
 }

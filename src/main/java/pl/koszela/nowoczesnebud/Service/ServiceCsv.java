@@ -9,7 +9,6 @@ import pl.koszela.nowoczesnebud.Model.*;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.util.*;
 
 @Service
@@ -26,7 +25,7 @@ public class ServiceCsv {
             MultipartFile multipartFile = i.next();
             File file = convertMultiPartToFile (multipartFile);
             String fileName = multipartFile.getOriginalFilename();
-            List<TypeOfTile> typeOfTileList = Poiji.fromExcel(file, TypeOfTile.class);
+            List<ProductType> productTypeList = Poiji.fromExcel(file, ProductType.class);
             List<Tile> tiles = Poiji.fromExcel(file, Tile.class);
             Optional<Tile> opt = tiles.stream().findFirst();
             if (!opt.isPresent())
@@ -34,8 +33,8 @@ public class ServiceCsv {
 
             tile.setManufacturer(getManufacturer(fileName));
             setDiscounts (opt.get(), tile);
-            GroupOfTile groupOfTile = new GroupOfTile(getTypeOfTile(fileName), typeOfTileList);
-            tile.getGroupOfTileList().add(groupOfTile);
+            ProductGroup productGroup = new ProductGroup(getTypeOfTile(fileName), productTypeList);
+            tile.getProductGroupList().add(productGroup);
 
             i.remove();
             boolean hasAnyMore = li.stream().anyMatch(e -> getManufacturer(e.getOriginalFilename()).equalsIgnoreCase(getManufacturer(fileName)));
@@ -60,7 +59,7 @@ public class ServiceCsv {
 
         while (i.hasNext()) {
             File file = i.next();
-            List<TypeOfTile> typeOfTileList = Poiji.fromExcel(file, TypeOfTile.class);
+            List<ProductType> productTypeList = Poiji.fromExcel(file, ProductType.class);
             List<Tile> tiles = Poiji.fromExcel(file, Tile.class);
             Optional<Tile> opt = tiles.stream().findFirst();
             if (!opt.isPresent())
@@ -68,8 +67,8 @@ public class ServiceCsv {
 
             tile.setManufacturer(getManufacturer(file.getName()));
             setDiscounts (opt.get(), tile);
-            GroupOfTile groupOfTile = new GroupOfTile(getTypeOfTile(file.getName()), typeOfTileList);
-            tile.getGroupOfTileList().add(groupOfTile);
+            ProductGroup productGroup = new ProductGroup(getTypeOfTile(file.getName()), productTypeList);
+            tile.getProductGroupList().add(productGroup);
 
             i.remove();
             boolean hasAnyMore = list.stream().anyMatch(e -> getManufacturer(e.getName()).equalsIgnoreCase(getManufacturer(file.getName())));
@@ -78,7 +77,6 @@ public class ServiceCsv {
                 tile = new Tile();
             }
         }
-
         return tilePathList;
     }
 
@@ -109,7 +107,7 @@ public class ServiceCsv {
 
     List<Gutter> readAndSaveGutters(String directory) {
         File[] files = new File(directory).listFiles(File::isFile);
-        List<Gutter> tilePathList = new ArrayList<>();
+        List<Gutter> gutters = new ArrayList<>();
 
         Gutter gutter = new Gutter();
         List<File> list = new LinkedList<>(Arrays.asList(files));
@@ -117,7 +115,7 @@ public class ServiceCsv {
 
         while (i.hasNext()) {
             File file = i.next();
-            List<TypeOfTile> typeOfTileList = Poiji.fromExcel(file, TypeOfTile.class);
+            List<ProductType> productTypeList = Poiji.fromExcel(file, ProductType.class);
             List<Gutter> gutterList = Poiji.fromExcel(file, Gutter.class);
             Optional<Gutter> opt = gutterList.stream().findFirst();
             if (!opt.isPresent())
@@ -125,18 +123,17 @@ public class ServiceCsv {
 
             gutter.setManufacturer(getManufacturer(file.getName()));
             setDiscounts (opt.get(), gutter);
-            GroupOfTile groupOfTile = new GroupOfTile(getTypeOfTile(file.getName()), typeOfTileList);
-            gutter.getGroupOfTileList().add(groupOfTile);
+            ProductGroup productGroup = new ProductGroup(getTypeOfTile(file.getName()), productTypeList);
+            gutter.getProductGroupList().add(productGroup);
 
             i.remove();
             boolean hasAnyMore = list.stream().anyMatch(e -> getManufacturer(e.getName()).equalsIgnoreCase(getManufacturer(file.getName())));
             if (!hasAnyMore) {
-                tilePathList.add(gutter);
+                gutters.add(gutter);
                 gutter = new Gutter();
             }
         }
-
-        return tilePathList;
+        return gutters;
     }
 
     private String getManufacturer(String url) {
