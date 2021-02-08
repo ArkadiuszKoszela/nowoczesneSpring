@@ -11,16 +11,16 @@ import java.util.List;
 public class AccessoriesService {
 
     private final AccessoriesRepository accessoriesRepository;
-    private final ServiceCsv serviceCsv;
+    private final CsvImporterImplTile csvImporterImplTile;
 
-    public AccessoriesService(AccessoriesRepository accessoriesRepository, ServiceCsv serviceCsv) {
+    public AccessoriesService(AccessoriesRepository accessoriesRepository, CsvImporterImplTile csvImporterImplTile) {
         this.accessoriesRepository = accessoriesRepository;
-        this.serviceCsv = serviceCsv;
+        this.csvImporterImplTile = csvImporterImplTile;
     }
 
     public List<Accessory> getAllAccessories() {
         if (CollectionUtils.isEmpty(accessoriesRepository.findAll())) {
-            accessoriesRepository.saveAll(serviceCsv.readAndSaveAccessories("src/main/resources/assets/accessories"));
+            accessoriesRepository.saveAll(csvImporterImplTile.readAndSaveAccessories("src/main/resources/assets/accessories"));
             return accessoriesRepository.findAll();
         }
         return accessoriesRepository.findAll();

@@ -6,6 +6,7 @@ import com.itextpdf.text.pdf.PdfPCell;
 import com.itextpdf.text.pdf.PdfPTable;
 import com.itextpdf.text.pdf.PdfWriter;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import pl.koszela.nowoczesnebud.Model.Offer;
 import pl.koszela.nowoczesnebud.Model.ProductGroup;
@@ -13,9 +14,7 @@ import pl.koszela.nowoczesnebud.Model.ProductType;
 import pl.koszela.nowoczesnebud.Model.Tile;
 import pl.koszela.nowoczesnebud.Repository.ProductGroupRepository;
 import pl.koszela.nowoczesnebud.Repository.ProductTypeRepository;
-import pl.koszela.nowoczesnebud.Service.OfferService;
-import pl.koszela.nowoczesnebud.Service.QuantityService;
-import pl.koszela.nowoczesnebud.Service.TilesService;
+import pl.koszela.nowoczesnebud.Service.*;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -23,27 +22,16 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Service
 public class CreateOffer {
 
-    private final OfferService offerService;
-    private final TilesService tilesService;
-    private final ProductGroupRepository productGroupRepository;
-    private final ProductTypeRepository productTypeRepository;
-    private final QuantityService quantityService;
+    private final ProductGroupService productGroupService;
 
-    public CreateOffer(OfferService offerService, TilesService tilesService,
-                       ProductGroupRepository productGroupRepository, ProductTypeRepository productTypeRepository,
-                       QuantityService quantityService) {
-        this.offerService = offerService;
-        this.tilesService = tilesService;
-        this.productGroupRepository = productGroupRepository;
-        this.productTypeRepository = productTypeRepository;
-        this.quantityService = quantityService;
+    public CreateOffer(@Lazy ProductGroupService productGroupService) {
+        this.productGroupService = productGroupService;
     }
 
     private Chunk getUrlToWebSite() throws IOException, DocumentException {
@@ -87,9 +75,7 @@ public class CreateOffer {
     }
 
     private void generateMainTile(Document document) throws IOException, DocumentException {
-        ProductGroup mainProductType = productGroupRepository.findProductGroupIsOptionIsMain();
-        if (mainProductType == null)
-            return;
+        ProductGroup mainProductType = productGroupService.findMainProductGroup();
         PdfPTable table = new PdfPTable(17);
         table.setTotalWidth(Utilities.millimetersToPoints(180));
         table.setLockedWidth(true);
@@ -101,36 +87,27 @@ public class CreateOffer {
         table.addCell(getCell(2, "Cena po rabacie", font(10), true));
         table.addCell(getCell(2, "Wartość netto po rabacie", font(10), true));
 
-        List<ProductType> productTypeList = productTypeRepository.findByProductGroupId(mainProductType.getId());
-        long idTile = productGroupRepository.findIdTile(mainProductType.getId());
-        Tile tile = tilesService.findTileByProductGroupId(idTile);
-        for (ProductType productType : productTypeList) {
+
+        for (ProductType productType : mainProductType.getProductTypeList()) {
             table.addCell(getCell(8, StringUtils.capitalize(productType.getName()), font(), false));
             table.addCell(getCell(1, "szt.", font(), false));
             table.addCell(getCell(2, String.valueOf(productType.getQuantity()), font(), false));
-            table.addCell(getCell(2, String.valueOf(productType.getUnitDetalPrice()), font(), false));
-            table.addCell(getCell(2, getPrice(tile, productType), font(), false));
-            table.addCell(getCell(2, getPriceAfterDiscount(tile, productType), font(), false));
+            table.addCell(getCell(2, String.valueOf(productType.getDetalPrice()), font(), false));
+            table.addCell(getCell(2, String.valueOf(productType.getSellingPrice()), font(), false));
+            table.addCell(getCell(2,
+                    String.valueOf(
+                            BigDecimal.valueOf(productType.getPurchasePrice() * productType.getQuantity()).setScale(2,
+                                    RoundingMode.HALF_UP)),
+                    font(), false));
         }
         document.add(table);
         document.add(new Paragraph(
                 "\n\n" + getTab(100) + "Elementy dachówkowe: " + mainProductType.getTotalPriceAfterDiscount() + " " +
                         "zł\n\n",
                 font(12, true)));
-    }
+        document.add(new Paragraph("Oferta OPCJONALNIE w cenach netto od: \n\n", font(12)));
+        document.add(new Paragraph("Najtańszy dach od: " + productGroupService.finCheapestOption(), font(12)));
 
-    private String getPrice(Tile tile, ProductType productType) {
-        return String.valueOf(quantityService.calculatePriceAfterDiscount(productType.getUnitDetalPrice(),
-                tile.getBasicDiscount(), tile.getAdditionalDiscount(), tile.getPromotionDiscount(),
-                tile.getSkontoDiscount()));
-    }
-
-    private String getPriceAfterDiscount(Tile tile, ProductType productType) {
-        return
-                BigDecimal.valueOf(productType.getQuantity()).multiply(quantityService.calculatePriceAfterDiscount(
-                        productType.getUnitDetalPrice(), tile.getBasicDiscount(), tile.getAdditionalDiscount(),
-                        tile.getPromotionDiscount(), tile.getSkontoDiscount())).setScale(2,
-                        RoundingMode.HALF_UP).toString();
     }
 
     private Paragraph createDate() throws IOException, DocumentException {

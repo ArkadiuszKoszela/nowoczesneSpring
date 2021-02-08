@@ -21,15 +21,6 @@ public class Tile {
     private long id;
     private String manufacturer;
 
-    @ExcelCellName("basicDiscount")
-    private int basicDiscount = 0;
-    @ExcelCellName("promotionDiscount")
-    private int promotionDiscount;
-    @ExcelCellName("additionalDiscount")
-    private int additionalDiscount;
-    @ExcelCellName("skonto")
-    private int skontoDiscount;
-
     @OneToMany(targetEntity = ProductGroup.class, fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @JoinColumn(name = "tile_id")
     @JsonIgnore
@@ -57,44 +48,12 @@ public class Tile {
         this.updateDateTime = updateDateTime;
     }
 
-    public void setBasicDiscount(int basicDiscount) {
-        this.basicDiscount = basicDiscount;
-    }
-
-    public void setPromotionDiscount(int promotionDiscount) {
-        this.promotionDiscount = promotionDiscount;
-    }
-
-    public void setAdditionalDiscount(int additionalDiscount) {
-        this.additionalDiscount = additionalDiscount;
-    }
-
-    public void setSkontoDiscount(int skontoDiscount) {
-        this.skontoDiscount = skontoDiscount;
-    }
-
     public long getId() {
         return id;
     }
 
     public String getManufacturer() {
         return manufacturer;
-    }
-
-    public int getBasicDiscount() {
-        return basicDiscount;
-    }
-
-    public int getPromotionDiscount() {
-        return promotionDiscount;
-    }
-
-    public int getAdditionalDiscount() {
-        return additionalDiscount;
-    }
-
-    public int getSkontoDiscount() {
-        return skontoDiscount;
     }
 
     public List<ProductGroup> getProductGroupList() {

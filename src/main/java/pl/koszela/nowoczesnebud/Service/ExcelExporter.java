@@ -85,12 +85,12 @@ public class ExcelExporter {
         for (ProductType productType : productGroup.getProductTypeList()) {
             Row row = sheet.createRow(rowCount++);
             createCell(row, columnCount++, productType.getName(), style);
-            createCell(row, columnCount++, productType.getUnitDetalPrice(), style);
+            createCell(row, columnCount++, productType.getDetalPrice(), style);
             createCell(row, columnCount++, productType.getQuantityConverter(), style);
-            createCell(row, columnCount++, tile.getBasicDiscount(), style);
-            createCell(row, columnCount++, tile.getAdditionalDiscount(), style);
-            createCell(row, columnCount++, tile.getPromotionDiscount(), style);
-            createCell(row, columnCount++, tile.getSkontoDiscount(), style);
+            createCell(row, columnCount++, productType.getBasicDiscount(), style);
+            createCell(row, columnCount++, productType.getAdditionalDiscount(), style);
+            createCell(row, columnCount++, productType.getPromotionDiscount(), style);
+            createCell(row, columnCount++, productType.getSkontoDiscount(), style);
             createCell(row, columnCount++, productType.getMapperName(), style);
             createCell(row, columnCount++, "", style);
             columnCount = 0;

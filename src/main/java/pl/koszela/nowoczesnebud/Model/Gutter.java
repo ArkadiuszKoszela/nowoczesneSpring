@@ -9,7 +9,6 @@ import javax.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
 
-@Data
 @Entity
 public class Gutter {
 
@@ -19,17 +18,32 @@ public class Gutter {
     private long id;
     private String manufacturer;
 
-    @ExcelCellName("basicDiscount")
-    private int basicDiscount = 0;
-    @ExcelCellName("promotionDiscount")
-    private int promotionDiscount;
-    @ExcelCellName("additionalDiscount")
-    private int additionalDiscount;
-    @ExcelCellName("skonto")
-    private int skontoDiscount;
-
-    @OneToMany(targetEntity = ProductGroup.class, fetch = FetchType.LAZY)
+    @OneToMany(targetEntity = ProductGroup.class, fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @JoinColumn(name = "gutter_id")
     @JsonIgnore
     List<ProductGroup> productGroupList = new ArrayList<>();
+
+    public long getId() {
+        return id;
+    }
+
+    public void setId(long id) {
+        this.id = id;
+    }
+
+    public String getManufacturer() {
+        return manufacturer;
+    }
+
+    public void setManufacturer(String manufacturer) {
+        this.manufacturer = manufacturer;
+    }
+
+    public List<ProductGroup> getProductGroupList() {
+        return productGroupList;
+    }
+
+    public void setProductGroupList(List<ProductGroup> productGroupList) {
+        this.productGroupList = productGroupList;
+    }
 }

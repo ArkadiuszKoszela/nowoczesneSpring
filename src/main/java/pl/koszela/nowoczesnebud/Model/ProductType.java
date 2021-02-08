@@ -2,16 +2,14 @@ package pl.koszela.nowoczesnebud.Model;
 
 import com.poiji.annotation.ExcelCell;
 import com.poiji.annotation.ExcelCellName;
-import lombok.Data;
 import org.hibernate.annotations.GenericGenerator;
 
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
-import java.math.BigDecimal;
 
 @Entity
-public class ProductType {
+public class ProductType extends Discount {
 
     @Id
     @GeneratedValue(generator = "generator")
@@ -20,14 +18,18 @@ public class ProductType {
     @ExcelCellName("name")
     private String name;
     @ExcelCell(1)
-    private BigDecimal unitDetalPrice;
+    private double detalPrice = 0.00d;
     @ExcelCell(2)
-    private BigDecimal quantityConverter;
+    private double quantityConverter;
     @ExcelCellName("mapperName")
-    private String mapperName;
+    private String mapperName = "";
+    @ExcelCellName("procent katalog")
+    private double marginUnitDetalPrice = 0.00d;
     private String unit;
-    private double price;
-    private double quantity = 0.0;
+    @ExcelCellName("cena zakupu")
+    private double purchasePrice = 0.00d;
+    private double sellingPrice = 0.00d;
+    private double quantity = 0.00d;
 
 
     public void setId(long id) {
@@ -38,11 +40,11 @@ public class ProductType {
         this.name = name;
     }
 
-    public void setUnitDetalPrice(BigDecimal unitDetalPrice) {
-        this.unitDetalPrice = unitDetalPrice;
+    public void setDetalPrice(double detalPrice) {
+        this.detalPrice = detalPrice;
     }
 
-    public void setQuantityConverter(BigDecimal quantityConverter) {
+    public void setQuantityConverter(double quantityConverter) {
         this.quantityConverter = quantityConverter;
     }
 
@@ -52,10 +54,6 @@ public class ProductType {
 
     public void setUnit(String unit) {
         this.unit = unit;
-    }
-
-    public void setPrice(double price) {
-        this.price = price;
     }
 
     public void setQuantity(double quantity) {
@@ -70,11 +68,11 @@ public class ProductType {
         return name;
     }
 
-    public BigDecimal getUnitDetalPrice() {
-        return unitDetalPrice;
+    public double getDetalPrice() {
+        return detalPrice;
     }
 
-    public BigDecimal getQuantityConverter() {
+    public double getQuantityConverter() {
         return quantityConverter;
     }
 
@@ -86,11 +84,31 @@ public class ProductType {
         return unit;
     }
 
-    public double getPrice() {
-        return price;
-    }
-
     public double getQuantity() {
         return quantity;
+    }
+
+    public double getPurchasePrice() {
+        return purchasePrice;
+    }
+
+    public void setPurchasePrice(double purchasePrice) {
+        this.purchasePrice = purchasePrice;
+    }
+
+    public double getSellingPrice() {
+        return sellingPrice;
+    }
+
+    public void setSellingPrice(double sellingPrice) {
+        this.sellingPrice = sellingPrice;
+    }
+
+    public double getMarginUnitDetalPrice() {
+        return marginUnitDetalPrice;
+    }
+
+    public void setMarginUnitDetalPrice(double marginUnitDetalPrice) {
+        this.marginUnitDetalPrice = marginUnitDetalPrice;
     }
 }

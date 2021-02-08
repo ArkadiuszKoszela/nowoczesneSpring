@@ -1,6 +1,5 @@
 package pl.koszela.nowoczesnebud.Service;
 
-import org.apache.commons.collections.CollectionUtils;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -9,8 +8,6 @@ import pl.koszela.nowoczesnebud.Model.DTO;
 import pl.koszela.nowoczesnebud.Model.ProductGroup;
 import pl.koszela.nowoczesnebud.Model.ProductType;
 import pl.koszela.nowoczesnebud.Model.Tile;
-import pl.koszela.nowoczesnebud.Repository.ProductGroupRepository;
-import pl.koszela.nowoczesnebud.Repository.ProductTypeRepository;
 import pl.koszela.nowoczesnebud.Repository.TileRepository;
 
 import java.io.IOException;
@@ -20,47 +17,25 @@ import java.util.*;
 public class TilesService {
 
     private final TileRepository tileRepository;
-    private final ServiceCsv serviceCsv;
+    private final CsvImporterImplTile csvImporterImplTile;
     private final QuantityService quantityService;
-    private final ProductGroupRepository productGroupRepository;
-    private final ProductTypeRepository productTypeRepository;
+    private final ProductGroupService productGroupService;
+    private final ProductTypeService productTypeService;
 
-    public TilesService(TileRepository tileRepository, ServiceCsv serviceCsv, @Lazy QuantityService quantityService,
-                        ProductGroupRepository productGroupRepository,
-                        ProductTypeRepository productTypeRepository) {
+    public TilesService(TileRepository tileRepository, CsvImporterImplTile csvImporterImplTile,
+                        @Lazy QuantityService quantityService,
+                        ProductGroupService productGroupService,
+                        ProductTypeService productTypeService) {
         this.tileRepository = Objects.requireNonNull(tileRepository);
-        this.serviceCsv = Objects.requireNonNull(serviceCsv);
+        this.csvImporterImplTile = Objects.requireNonNull(csvImporterImplTile);
         this.quantityService = quantityService;
-        this.productGroupRepository = productGroupRepository;
-        this.productTypeRepository = productTypeRepository;
+        this.productGroupService = productGroupService;
+        this.productTypeService = productTypeService;
     }
 
     @Transactional
     public List<Tile> getAllTilesOrCreate() {
-        List<Tile> allTiles = tileRepository.findAll();
-        if (CollectionUtils.isEmpty(allTiles)) {
-            List<Tile> tiles = serviceCsv.readAndSaveTiles("src/main/resources/assets/cenniki");
-            for (Tile tile : tiles) {
-                for (ProductGroup productGroup : tile.getProductGroupList()) {
-                    List<ProductType> productTypeList =
-                            productTypeRepository.saveAll(productGroup.getProductTypeList());
-                    productGroup.setProductTypeList(productTypeList);
-                }
-                List<ProductGroup> productGroupList = productGroupRepository.saveAll(tile.getProductGroupList());
-                tile.setProductGroupList(productGroupList);
-            }
-            tileRepository.saveAll(tiles);
-            return convertTilesToDTO(tiles);
-        }
-        return convertTilesToDTO(allTiles);
-    }
-
-    public List<ProductType> saveProductTypes(List<ProductType> productTypeList) {
-        return productTypeRepository.saveAll(productTypeList);
-    }
-
-    public ProductGroup saveProductGroup(ProductGroup productGroupList) {
-        return productGroupRepository.save(productGroupList);
+        return tileRepository.findAll();
     }
 
     public List<Tile> getAllTiles() {
@@ -75,26 +50,22 @@ public class TilesService {
         return tileRepository.findById(tileId);
     }
 
-    public void saveTile(Tile tile) {
-        tileRepository.save(tile);
-    }
-
     public Tile findTileByProductGroupId(long id) {
         return tileRepository.findTileByProductGroupId(id);
     }
 
     public List<Tile> getAllTile(List<MultipartFile> list) throws IOException {
-        List<Tile> tiles = serviceCsv.readAndSaveTiles(list);
+        List<Tile> tiles = csvImporterImplTile.readAndSaveTiles(list);
         if (tiles.size() == 0)
             return tiles;
         deleteAll ();
         for (Tile tile : tiles) {
             for (ProductGroup productGroup : tile.getProductGroupList()) {
                 List<ProductType> productTypeList =
-                        productTypeRepository.saveAll(productGroup.getProductTypeList());
+                        productTypeService.saveAll(productGroup.getProductTypeList());
                 productGroup.setProductTypeList(productTypeList);
             }
-            List<ProductGroup> productGroupList = productGroupRepository.saveAll(tile.getProductGroupList());
+            List<ProductGroup> productGroupList = productGroupService.saveAll(tile.getProductGroupList());
             tile.setProductGroupList(productGroupList);
         }
         return tileRepository.saveAll(tiles);
@@ -110,50 +81,24 @@ public class TilesService {
         return getAll;
     }
 
-    public List<Tile> clearQuantity() {
-        List<Tile> tileRepositoryAll = tileRepository.findAll();
-        return tileRepository.saveAll(tileRepositoryAll);
-    }
-
-    public List<String> getTilesManufacturers() {
-        return tileRepository.findManufacturers();
-    }
-
     public List<Tile> getDiscounts() {
         return tileRepository.findDiscounts();
     }
 
-    public List<Tile> saveDiscounts(Tile tileToSave) {
-        Optional<Tile> tile = tileRepository.findById(tileToSave.getId());
-        if (!tile.isPresent())
-            return new ArrayList<>();
-        tile.get().setBasicDiscount(tileToSave.getBasicDiscount());
-        tile.get().setAdditionalDiscount(tileToSave.getAdditionalDiscount());
-        tile.get().setPromotionDiscount(tileToSave.getPromotionDiscount());
-        tile.get().setSkontoDiscount(tileToSave.getSkontoDiscount());
-        tileRepository.save(tile.get());
-        return getAllTiles();
-    }
-
     public DTO editTypeOfTile(DTO dto) {
-        long tileId = productGroupRepository.findIdTile(dto.getProductGroup().getId());
+        long tileId = productGroupService.findIdTile(dto.getProductGroup().getId());
         Optional<Tile> tile = findById(tileId);
         if (!tile.isPresent())
             return dto;
-        return quantityService.setQuantity(dto, tile.get());
+        return quantityService.setQuantity(dto);
     }
 
-    public ProductGroup setOption(ProductGroup updateProductGroup) {
-        List<ProductType> productTypeList = productTypeRepository.findProductsTypes(updateProductGroup.getId());
-        updateProductGroup.setProductTypeList(productTypeList);
-        return productGroupRepository.save(updateProductGroup);
-    }
-
-    public List<ProductGroup> getProductGroups(long id) {
-        return productGroupRepository.findProductsGroupForTile(id);
-    }
-
-    public List<ProductType> getProductTypes(long id) {
-        return productTypeRepository.findProductsTypes(id);
+    public List<ProductGroup> getProductGroupsForTile() {
+        List<Tile> tiles = getAllTiles ();
+        List<ProductGroup> productGroupList = new ArrayList<>();
+        for (Tile tile: tiles) {
+            productGroupList.addAll(productGroupService.getProductGroupsForTile(tile.getId()));
+        }
+        return productGroupList;
     }
 }

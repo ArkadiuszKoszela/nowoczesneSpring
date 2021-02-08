@@ -13,8 +13,10 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -29,17 +31,24 @@ public class TilesController {
     private final InputService inputService;
     private final CreateOffer createOffer;
     private final ExcelExporter excelExporter;
+    private final ProductGroupService productGroupService;
+    private final ProductTypeService productTypeService;
 
-    public TilesController(TilesService tilesService, QuantityService quantityService, InputService inputService, CreateOffer createOffer, ExcelExporter excelExporter) {
+    public TilesController(TilesService tilesService, QuantityService quantityService, InputService inputService,
+                           CreateOffer createOffer, ExcelExporter excelExporter,
+                           ProductGroupService productGroupService,
+                           ProductTypeService productTypeService) {
         this.tilesService = tilesService;
         this.quantityService = quantityService;
         this.inputService = inputService;
         this.createOffer = createOffer;
         this.excelExporter = excelExporter;
+        this.productGroupService = productGroupService;
+        this.productTypeService = productTypeService;
     }
 
     @PostMapping("/saveInputs")
-    public List<Input> saveInputList (@RequestBody List<Input> inputList) {
+    public List<Input> saveInputList(@RequestBody List<Input> inputList) {
         return inputService.saveInputList(inputList);
     }
 
@@ -48,19 +57,29 @@ public class TilesController {
         return tilesService.getAllTilesOrCreate();
     }
 
+    @GetMapping("/productGroup")
+    public List<ProductGroup> getProductGroups(@RequestParam("id") long id) {
+        return productGroupService.getProductGroupsForTile(id);
+    }
+
     @GetMapping("/productGroups")
-    public List<ProductGroup> getProductGroups(@RequestParam ("id") long id) {
-        return tilesService.getProductGroups(id);
+    public List<ProductGroup> getProductGroups() {
+        return tilesService.getProductGroupsForTile();
     }
 
     @GetMapping("/productTypes")
-    public List<ProductType> getProductTypes(@RequestParam ("id") long id) {
-        return tilesService.getProductTypes(id);
+    public List<ProductType> getProductTypes(@RequestParam("id") long id) {
+        return productTypeService.findProductTypesByProductGroupId(id);
+    }
+
+    @PostMapping("/productType")
+    public ProductType getProductTypes(@RequestParam("value") int value, @RequestBody ProductGroup productGroup) {
+        return productTypeService.getProductType(value, productGroup);
     }
 
     @PostMapping("/map")
-    public List<Tile> getTilesWithFilledQuantity(@RequestBody List<Input> input){
-        return tilesService.convertTilesToDTO (quantityService.filledQuantityInTiles(input));
+    public List<Tile> getTilesWithFilledQuantity(@RequestBody List<Input> input) {
+        return tilesService.convertTilesToDTO(quantityService.filledQuantityInTiles(input));
     }
 
     @PostMapping("/generateOffer")
@@ -81,34 +100,34 @@ public class TilesController {
         return new ResponseEntity<>(resource, headers, HttpStatus.OK);
     }
 
-    @GetMapping("/clear")
-    public List<Tile> clearQuantityInTiles (){
-        return tilesService.clearQuantity();
-    }
-
-    @GetMapping("getManufacturers")
-    public List<String> getManufacturers () {
-        return tilesService.getTilesManufacturers ();
-    }
-
     @GetMapping("/getDiscounts")
     public List<Tile> getDiscounts() {
-        return tilesService.getDiscounts ();
+        return tilesService.getDiscounts();
     }
 
     @PostMapping("/saveDiscounts")
-    public List<Tile> saveDiscounts(@RequestBody Tile tile) {
-        return tilesService.saveDiscounts (tile);
+    public List<ProductGroup> saveDiscounts(@RequestBody ProductType productType) {
+        return productGroupService.saveDiscounts(productType);
     }
 
     @PostMapping("/editTypeOfTile")
-    public DTO editTypeOfTile (@RequestBody DTO dto) {
+    public DTO editTypeOfTile(@RequestBody DTO dto) {
         return tilesService.editTypeOfTile(dto);
     }
 
-    @GetMapping(value="/export/excel", produces="application/zip")
-    public void exportToExcel(HttpServletResponse response) throws IOException {
+    @PostMapping("/import")
+    public List<Tile> importFiles(@RequestParam("file[]") MultipartFile[] file) throws IOException {
+        List<MultipartFile> array = Arrays.asList(file);
+        return tilesService.getAllTile(array);
+    }
 
+    @PostMapping("/setOption")
+    public ProductGroup setOption(@RequestBody ProductGroup updateProductGroup) {
+        return productGroupService.setOption(updateProductGroup);
+    }
+
+    @GetMapping(value = "/export/excel", produces = "application/zip")
+    public void exportToExcel(HttpServletResponse response) throws IOException {
         //setting headers
         response.setStatus(HttpServletResponse.SC_OK);
         response.addHeader("Content-Disposition", "attachment; filename=\"cenniki dachówek.zip\"");
@@ -129,22 +148,33 @@ public class TilesController {
             fileInputStream.close();
             zipOutputStream.closeEntry();
         }
-
         zipOutputStream.close();
     }
 
-    @PostMapping ("/import")
-    public List<Tile> importFiles (@RequestParam("file[]") MultipartFile[] file) throws IOException {
-        List<MultipartFile> array = Arrays.asList(file);
-        List<Tile> list = tilesService.getAllTile(array);
-        return list;
+    @PostMapping("/calculateMargin")
+    public void calculateMargin(@RequestBody int margin) {
+        List<ProductGroup> allProductGroupForTile = new ArrayList<>();
+        for (ProductGroup productGroup : getAllTiles().iterator().next().getProductGroupList()) {
+            if (productGroup.getOption() != null)
+                allProductGroupForTile.add(productGroup);
+        }
+        List<ProductGroup> productGroupList = productGroupService.calculateMargin(margin, null, allProductGroupForTile);
+        productGroupService.saveAll(productGroupList);
     }
 
-    @PostMapping("/setOption")
-    public ProductGroup setOption (@RequestBody ProductGroup updateProductGroup) {
-        return tilesService.setOption(updateProductGroup);
+    @PostMapping("/calculateDiscount")
+    public void calculateDiscount(@RequestBody int discount) {
+        List<ProductGroup> allProductGroupForTile = new ArrayList<>();
+        for (ProductGroup productGroup : getAllTiles().iterator().next().getProductGroupList()) {
+            if (productGroup.getOption() != null)
+                allProductGroupForTile.add(productGroup);
+        }
+        List<ProductGroup> productGroupList = productGroupService.calculateMargin(null, discount, allProductGroupForTile);
+        productGroupService.saveAll(productGroupList);
     }
 
-
-
+    @GetMapping("/hasOnlyOneMainProductGroup")
+    public boolean hasOnlyOneMainProductGroup () {
+        return productGroupService.hasOnlyOneMainProductGroup ();
+    }
 }

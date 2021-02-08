@@ -2,12 +2,13 @@ package pl.koszela.nowoczesnebud.Service;
 
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
+import org.springframework.web.multipart.MultipartFile;
 import pl.koszela.nowoczesnebud.Model.*;
 import pl.koszela.nowoczesnebud.Repository.GuttersRepository;
 import pl.koszela.nowoczesnebud.Repository.ProductGroupRepository;
 import pl.koszela.nowoczesnebud.Repository.ProductTypeRepository;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -17,37 +18,47 @@ import java.util.Optional;
 public class GuttersService {
 
     private final GuttersRepository guttersRepository;
-    private final ServiceCsv serviceCsv;
-    private final ProductGroupRepository productGroupRepository;
-    private final ProductTypeRepository productTypeRepository;
+    private final CsvImporterImplTile csvImporterImplTile;
     private final QuantityService quantityService;
+    private final ProductGroupService productGroupService;
+    private final ProductTypeService productTypeService;
 
-    public GuttersService(GuttersRepository guttersRepository, ServiceCsv serviceCsv,
-                          ProductGroupRepository productGroupRepository,
-                          ProductTypeRepository productTypeRepository,
-                          @Lazy QuantityService quantityService) {
+    public GuttersService(GuttersRepository guttersRepository, CsvImporterImplTile csvImporterImplTile,
+                          @Lazy QuantityService quantityService,
+                          ProductGroupService productGroupService,
+                          ProductTypeService productTypeService) {
         this.guttersRepository = Objects.requireNonNull(guttersRepository);
-        this.serviceCsv = Objects.requireNonNull(serviceCsv);
-        this.productGroupRepository = productGroupRepository;
-        this.productTypeRepository = productTypeRepository;
+        this.csvImporterImplTile = Objects.requireNonNull(csvImporterImplTile);
         this.quantityService = quantityService;
+        this.productGroupService = productGroupService;
+        this.productTypeService = productTypeService;
     }
 
     public List<Gutter> getAllGutters() {
-        if (CollectionUtils.isEmpty(guttersRepository.findAll())) {
-            List<Gutter> gutterList = serviceCsv.readAndSaveGutters("src/main/resources/assets/rynny");
-            for (Gutter gutter : gutterList) {
-                for (ProductGroup productGroup : gutter.getProductGroupList()) {
-                    List<ProductType> productTypeList =
-                            productTypeRepository.saveAll(productGroup.getProductTypeList());
-                    productGroup.setProductTypeList(productTypeList);
-                }
-                List<ProductGroup> productGroupList = productGroupRepository.saveAll(gutter.getProductGroupList());
-                gutter.setProductGroupList(productGroupList);
-            }
-            return guttersRepository.saveAll(gutterList);
-        }
         return guttersRepository.findAll();
+    }
+
+    public List<Gutter> importGutters(List<MultipartFile> list) throws IOException {
+        List<Gutter> gutters = csvImporterImplTile.readAndSaveGutters(list);
+        if (gutters.size() == 0)
+            return gutters;
+        deleteAll ();
+        for (Gutter gutter : gutters) {
+            for (ProductGroup productGroup : gutter.getProductGroupList()) {
+                List<ProductType> productTypeList =
+                        productTypeService.saveAll(productGroup.getProductTypeList());
+                productGroup.setProductTypeList(productTypeList);
+            }
+            List<ProductGroup> productGroupList = productGroupService.saveAll(gutter.getProductGroupList());
+            gutter.setProductGroupList(productGroupList);
+        }
+        return saveAll(gutters);
+    }
+
+    private void deleteAll () {
+        List<Gutter> gutterList = getAllGutters();
+        gutterList.forEach(e -> e.getProductGroupList().forEach(ProductGroup::getProductTypeList));
+        guttersRepository.deleteAll(gutterList);
     }
 
     public List<Gutter> saveAll (List<Gutter> gutterList) {
@@ -58,37 +69,16 @@ public class GuttersService {
         return guttersRepository.findDiscounts();
     }
 
-    public List<ProductGroup> getProductGroups(long id) {
-        return productGroupRepository.findProductsGroupForGutter(id);
-    }
-
-    public List<ProductType> getProductTypes(long id) {
-        return productTypeRepository.findProductsTypes(id);
-    }
-
-    public List<Gutter> saveDiscounts(Gutter tileToSave) {
-        Optional<Gutter> gutters = guttersRepository.findById(tileToSave.getId());
-        if (!gutters.isPresent())
-            return new ArrayList<>();
-        gutters.get().setBasicDiscount(tileToSave.getBasicDiscount());
-        gutters.get().setAdditionalDiscount(tileToSave.getAdditionalDiscount());
-        gutters.get().setPromotionDiscount(tileToSave.getPromotionDiscount());
-        gutters.get().setSkontoDiscount(tileToSave.getSkontoDiscount());
-        guttersRepository.save(gutters.get());
-        return getDiscounts();
-    }
-
     public DTO editType(DTO dto) {
-        long idGutter = productGroupRepository.findIdGutter(dto.getProductGroup().getId());
-        Optional<Gutter> gutter = guttersRepository.findById(idGutter);
-        if (!gutter.isPresent())
-            return dto;
-        return quantityService.setQuantity(dto, gutter.get());
+        return quantityService.setQuantity(dto);
     }
 
-    public ProductGroup setOption(ProductGroup updateProductGroup) {
-        List<ProductType> productTypeList = productTypeRepository.findProductsTypes(updateProductGroup.getId());
-        updateProductGroup.setProductTypeList(productTypeList);
-        return productGroupRepository.save(updateProductGroup);
+    public List<ProductGroup> getProductGroupsForGutter() {
+        List<Gutter> gutters = getAllGutters ();
+        List<ProductGroup> productGroupList = new ArrayList<>();
+        for (Gutter gutter: gutters) {
+            productGroupList.addAll(productGroupService.getProductGroupsForGutter(gutter.getId()));
+        }
+        return productGroupList;
     }
 }

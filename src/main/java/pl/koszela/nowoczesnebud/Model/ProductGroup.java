@@ -1,7 +1,6 @@
 package pl.koszela.nowoczesnebud.Model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import lombok.Data;
 
 import javax.persistence.*;
 import java.util.ArrayList;
@@ -30,6 +29,7 @@ public class ProductGroup {
     private Double totalPriceAfterDiscount = 0.0;
     private Double totalPriceDetal = 0.0;
     private Double totalProfit = 0.0;
+    private Double totalSellingPrice= 0.0;
 
     @OneToMany(targetEntity = ProductType.class, fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @JoinColumn(name = "product_group_id")
@@ -90,5 +90,13 @@ public class ProductGroup {
 
     public List<ProductType> getProductTypeList() {
         return productTypeList;
+    }
+
+    public Double getTotalSellingPrice() {
+        return totalSellingPrice;
+    }
+
+    public void setTotalSellingPrice(Double totalSellingPrice) {
+        this.totalSellingPrice = totalSellingPrice;
     }
 }
