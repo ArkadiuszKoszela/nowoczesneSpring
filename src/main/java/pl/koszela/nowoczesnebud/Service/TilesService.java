@@ -50,10 +50,6 @@ public class TilesService {
         return tileRepository.findById(tileId);
     }
 
-    public Tile findTileByProductGroupId(long id) {
-        return tileRepository.findTileByProductGroupId(id);
-    }
-
     public List<Tile> getAllTile(List<MultipartFile> list) throws IOException {
         List<Tile> tiles = csvImporterImplTile.readAndSaveTiles(list);
         if (tiles.size() == 0)
@@ -68,7 +64,8 @@ public class TilesService {
             List<ProductGroup> productGroupList = productGroupService.saveAll(tile.getProductGroupList());
             tile.setProductGroupList(productGroupList);
         }
-        return tileRepository.saveAll(tiles);
+        List<Tile> tileList = tileRepository.saveAll(tiles);
+        return tileList;
     }
 
     private void deleteAll () {

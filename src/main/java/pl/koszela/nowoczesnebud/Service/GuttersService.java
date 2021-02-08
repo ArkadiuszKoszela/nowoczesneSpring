@@ -52,7 +52,8 @@ public class GuttersService {
             List<ProductGroup> productGroupList = productGroupService.saveAll(gutter.getProductGroupList());
             gutter.setProductGroupList(productGroupList);
         }
-        return saveAll(gutters);
+        List<Gutter> gutterList = saveAll(gutters);
+        return gutterList;
     }
 
     private void deleteAll () {
