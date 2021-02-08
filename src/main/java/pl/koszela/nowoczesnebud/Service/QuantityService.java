@@ -100,7 +100,7 @@ public class QuantityService {
         return setScale(priceAfterDiscount);
     }
 
-    private double calculateTotalProfit(ProductGroup tile) {
+    double calculateTotalProfit(ProductGroup tile) {
         double totalProfit = tile.getTotalPriceDetal()
                 - tile.getTotalPriceAfterDiscount();
         return setScale(totalProfit);

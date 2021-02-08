@@ -9,16 +9,21 @@ import pl.koszela.nowoczesnebud.Repository.ProductGroupRepository;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static pl.koszela.nowoczesnebud.Service.QuantityService.setScale;
+
 @Service
 public class ProductGroupService {
 
     private final ProductGroupRepository productGroupRepository;
     private final ProductTypeService productTypeService;
+    private final QuantityService quantityService;
 
     public ProductGroupService(ProductGroupRepository productGroupRepository,
-                               @Lazy ProductTypeService productTypeService) {
+                               @Lazy ProductTypeService productTypeService,
+                               @Lazy QuantityService quantityService) {
         this.productGroupRepository = productGroupRepository;
         this.productTypeService = productTypeService;
+        this.quantityService = quantityService;
     }
 
     public ProductGroup setOption(ProductGroup updateProductGroup) {
@@ -44,7 +49,12 @@ public class ProductGroupService {
             ProductGroup productGroup = findById(idGroup);
             double sumPurchasePrice = productGroup.getProductTypeList().stream().mapToDouble(
                     e -> e.getQuantity() * e.getPurchasePrice()).sum();
-            productGroup.setTotalPriceAfterDiscount(QuantityService.setScale(sumPurchasePrice));
+            double sumDetalPrice = productGroup.getProductTypeList().stream()
+                    .mapToDouble(productType -> productType.getDetalPrice() * productType.getQuantity())
+                    .sum();
+            productGroup.setTotalPriceDetal(setScale(sumDetalPrice));
+            productGroup.setTotalPriceAfterDiscount(setScale(sumPurchasePrice));
+            productGroup.setTotalProfit(quantityService.calculateTotalProfit(productGroup));
             save(productGroup);
             return getAllProductGroups ();
         }
@@ -66,7 +76,12 @@ public class ProductGroupService {
         ProductGroup productGroup1 = findById(idGroup1);
         double sumPurchasePrice = productGroup1.getProductTypeList().stream().mapToDouble(
                 e -> e.getQuantity() * e.getPurchasePrice()).sum();
-        productGroup1.setTotalPriceAfterDiscount(QuantityService.setScale(sumPurchasePrice));
+        double sumDetalPrice = productGroup.getProductTypeList().stream()
+                .mapToDouble(productType -> productType.getDetalPrice() * productType.getQuantity())
+                .sum();
+        productGroup.setTotalPriceDetal(setScale(sumDetalPrice));
+        productGroup1.setTotalPriceAfterDiscount(setScale(sumPurchasePrice));
+        productGroup.setTotalProfit(quantityService.calculateTotalProfit(productGroup));
         save(productGroup1);
         return getAllProductGroups ();
     }
@@ -96,16 +111,16 @@ public class ProductGroupService {
             for (ProductType productType: productGroup.getProductTypeList()) {
                 if (margin != null) {
                     double sellingPrice = productType.getPurchasePrice() * (100 + margin) / 100;
-                    productType.setSellingPrice(QuantityService.setScale(sellingPrice));
+                    productType.setSellingPrice(setScale(sellingPrice));
                 }
                 if (discount != null) {
                     double sellingPrice = productType.getDetalPrice() * (100 - discount) / 100;
-                    productType.setSellingPrice(QuantityService.setScale(sellingPrice));
+                    productType.setSellingPrice(setScale(sellingPrice));
                 }
             }
             double sumSellingPrice = productGroup.getProductTypeList().stream().mapToDouble(
                     productType -> productType.getQuantity() * productType.getSellingPrice()).sum();
-            productGroup.setTotalSellingPrice(QuantityService.setScale(sumSellingPrice));
+            productGroup.setTotalSellingPrice(setScale(sumSellingPrice));
         }
         return productGroupList;
     }
