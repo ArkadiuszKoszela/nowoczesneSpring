@@ -15,7 +15,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/gutters")
-@CrossOrigin(origins = "https://angular-nowoczesne.herokuapp.com")
+@CrossOrigin(origins = "https://angular-nowoczesne-af04d5c56981.herokuapp.com")
 //@CrossOrigin(origins = "http://localhost:4200")
 public class GuttersController {
 
