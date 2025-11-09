@@ -1,0 +1,26 @@
+package pl.koszela.nowoczesnebud.Repository;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+import pl.koszela.nowoczesnebud.Model.Product;
+import pl.koszela.nowoczesnebud.Model.ProductCategory;
+
+import java.util.List;
+
+@Repository
+public interface ProductRepository extends JpaRepository<Product, Long> {
+
+    List<Product> findByCategory(ProductCategory category);
+
+    List<Product> findByCategoryAndManufacturer(ProductCategory category, String manufacturer);
+
+    List<Product> findByManufacturer(String manufacturer);
+
+    @Query("SELECT DISTINCT p.manufacturer FROM Product p WHERE p.category = :category")
+    List<String> findDistinctManufacturersByCategory(@Param("category") ProductCategory category);
+
+    List<Product> findByMapperName(String mapperName);
+}
+

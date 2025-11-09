@@ -6,6 +6,10 @@ import javax.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Grupa produktów
+ * Używana przez TilesService, GuttersService (stary system)
+ */
 @Entity
 public class ProductGroup {
 
@@ -21,15 +25,18 @@ public class ProductGroup {
     }
 
     @Id
-    @GeneratedValue (strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
+    
     private String typeName;
+    
     @Column(name = "option_name")
     private Boolean option;
+    
     private Double totalPriceAfterDiscount = 0.0;
     private Double totalPriceDetal = 0.0;
     private Double totalProfit = 0.0;
-    private Double totalSellingPrice= 0.0;
+    private Double totalSellingPrice = 0.0;
 
     @OneToMany(targetEntity = ProductType.class, fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @JoinColumn(name = "product_group_id")
@@ -100,3 +107,5 @@ public class ProductGroup {
         this.totalSellingPrice = totalSellingPrice;
     }
 }
+
+

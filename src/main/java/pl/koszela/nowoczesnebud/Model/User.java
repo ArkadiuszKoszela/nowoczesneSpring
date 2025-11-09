@@ -1,17 +1,24 @@
 package pl.koszela.nowoczesnebud.Model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-import org.springframework.data.annotation.CreatedDate;
 
 import javax.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Date;
 
+/**
+ * UPROSZCZONY MODEL
+ * PRZED: @OneToOne(cascade=ALL) + @JoinColumn → osobna tabela addresses + JOIN
+ * PO: @Embedded → pola Address bezpośrednio w tabeli users
+ * KORZYŚĆ: Szybsze zapytania SQL (bez JOIN), prostsza struktura DB
+ */
 @Data
 @Entity
+@Table(name = "\"user\"") // H2 wymaga cudzysłowów dla słowa kluczowego "user"
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class User {
 
     @Id
@@ -19,12 +26,14 @@ public class User {
     private long id;
     private String name;
     private String surname;
-    @OneToOne(targetEntity = Address.class, cascade = CascadeType.ALL)
-    @JoinColumn(name = "address_id")
+    
+    @Embedded
     private Address address;
+    
     private String telephoneNumber;
     private LocalDate dateOfMeeting;
     private String email;
+    
     @CreationTimestamp
     private LocalDateTime createDateTime;
 

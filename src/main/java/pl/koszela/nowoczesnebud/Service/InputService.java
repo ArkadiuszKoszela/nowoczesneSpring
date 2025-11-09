@@ -6,6 +6,12 @@ import pl.koszela.nowoczesnebud.Repository.InputRepository;
 
 import java.util.List;
 
+/**
+ * Serwis do zarządzania Input
+ * 
+ * UWAGA: Nie używamy tutaj saveInputList() które robiło findAll() - to było źródłem problemu
+ * z zerowaniem danych poprzednich projektów. Teraz Input jest zarządzany przez ProjectService.
+ */
 @Service
 public class InputService {
 
@@ -15,20 +21,20 @@ public class InputService {
         this.inputRepository = inputRepository;
     }
 
-    public List<Input> saveAll (List<Input> inputList) {
+    /**
+     * Zapisuje listę inputów (używane przez ProjectService)
+     */
+    public List<Input> saveAll(List<Input> inputList) {
         return inputRepository.saveAll(inputList);
     }
-
-    public List<Input> saveInputList (List<Input> inputList) {
-        List<Input> inputs = inputRepository.findAll();
-        if (inputs.size() == 0)
-            return inputRepository.saveAll(inputList);
-        for (Input inputToUpdate: inputs) {
-            for (Input input: inputList) {
-                if (inputToUpdate.getMapperName().equalsIgnoreCase(input.getMapperName()))
-                    inputToUpdate.setQuantity(input.getQuantity());
-            }
-        }
-        return inputRepository.saveAll(inputs);
-    }
+    
+    /**
+     * USUNIĘTO: saveInputList() - było źródłem problemu z zerowaniem danych
+     * 
+     * Ta metoda robiła findAll() na WSZYSTKICH inputach ze wszystkich projektów
+     * i nadpisywała je, co powodowało zerowanie poprzednich projektów.
+     * 
+     * Teraz Input jest zarządzany przez ProjectService który operuje tylko na inputach
+     * powiązanych z konkretnym projektem.
+     */
 }
