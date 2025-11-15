@@ -21,6 +21,7 @@ import pl.koszela.nowoczesnebud.Service.ProductService;
 import javax.validation.Valid;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -91,6 +92,84 @@ public class ProductController {
             @RequestParam ProductCategory category,
             @RequestParam String manufacturer) {
         return ResponseEntity.ok(productService.getGroupNames(category, manufacturer));
+    }
+
+    /**
+     * Pobierz słownik sugestii atrybutów dla autouzupełniania
+     * GET /api/products/attribute-suggestions?category=TILE
+     * 
+     * Zwraca mapę: {"kolor": ["czerwony","brązowy","czarny"], "kształt": ["płaska","karpiówka"]}
+     * - Parsuje attributes JSON ze wszystkich GRUP PRODUKTOWYCH danej kategorii
+     * - Zbiera unikalne klucze i wartości atrybutów
+     */
+    @GetMapping("/attribute-suggestions")
+    public ResponseEntity<Map<String, List<String>>> getAttributeSuggestions(
+            @RequestParam ProductCategory category) {
+        
+        logger.debug("Pobieranie słownika atrybutów dla kategorii: {}", category);
+        
+        try {
+            Map<String, List<String>> suggestions = productService.getAttributeSuggestions(category);
+            return ResponseEntity.ok(suggestions);
+        } catch (Exception e) {
+            logger.error("Błąd podczas pobierania słownika atrybutów dla kategorii {}: {}", category, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * Pobierz atrybuty dla konkretnej grupy produktowej
+     * GET /api/products/group-attributes?category=TILE&manufacturer=CANTUS&groupName=Nuance
+     * 
+     * Zwraca: {"attributes": "{\"kolor\":[\"czerwony\"],\"kształt\":[\"płaska\"]}"}
+     * lub 404 jeśli grupa nie ma atrybutów
+     */
+    @GetMapping("/group-attributes")
+    public ResponseEntity<Map<String, String>> getGroupAttributes(
+            @RequestParam ProductCategory category,
+            @RequestParam String manufacturer,
+            @RequestParam String groupName) {
+        
+        logger.debug("Pobieranie atrybutów dla grupy: {}/{}/{}", category, manufacturer, groupName);
+        
+        try {
+            String attributes = productService.getGroupAttributes(category, manufacturer, groupName);
+            if (attributes != null) {
+                Map<String, String> response = new HashMap<>();
+                response.put("attributes", attributes);
+                return ResponseEntity.ok(response);
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            logger.error("Błąd podczas pobierania atrybutów dla grupy: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * Zapisz/zaktualizuj atrybuty dla grupy produktowej
+     * PUT /api/products/group-attributes
+     * 
+     * Request Body:
+     * {
+     *   "category": "TILE",
+     *   "manufacturer": "CANTUS",
+     *   "groupName": "Nuance",
+     *   "attributes": {"kolor":["czerwony","brązowy"],"kształt":["płaska"]}
+     * }
+     */
+    @PutMapping("/group-attributes")
+    public ResponseEntity<?> saveGroupAttributes(@RequestBody @Valid pl.koszela.nowoczesnebud.DTO.GroupAttributesRequest request) {
+        logger.debug("Zapisywanie atrybutów dla grupy: {}/{}/{}", request.getCategory(), request.getManufacturer(), request.getGroupName());
+        
+        try {
+            productService.saveGroupAttributes(request);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            logger.error("Błąd podczas zapisywania atrybutów dla grupy: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
+        }
     }
 
     /**

@@ -96,6 +96,12 @@ public class PriceListSnapshotItem {
     private Boolean isMainOption;
 
     /**
+     * Typ akcesorium (STANDARD, PREMIUM, LUX) - tylko dla category=ACCESSORY
+     */
+    @Column(name = "accessory_type")
+    private String accessoryType;
+
+    /**
      * Data utworzenia pozycji w bazie
      */
     @CreationTimestamp

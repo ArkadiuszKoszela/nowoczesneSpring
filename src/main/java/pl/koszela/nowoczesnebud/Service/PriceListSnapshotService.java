@@ -106,6 +106,12 @@ public class PriceListSnapshotService {
         item.setUnit(product.getUnit());
         item.setQuantityConverter(product.getQuantityConverter() != null ? product.getQuantityConverter() : 1.0);
         item.setIsMainOption(product.getIsMainOption());
+        
+        // Kopiuj accessoryType (dla ACCESSORY)
+        if (product.getCategory() == ProductCategory.ACCESSORY) {
+            item.setAccessoryType(product.getAccessoryType());
+        }
+        
         return item;
     }
 

@@ -122,6 +122,14 @@ public class Input {
     @Column(name = "is_main_option", nullable = true)
     @JsonProperty
     private Boolean isMainOption;
+    
+    /**
+     * Kategoria produktu dla Input z productId (TILE, GUTTER, ACCESSORY)
+     * Używane do filtrowania Input po kategorii (np. dla akcesoriów)
+     */
+    @Column(name = "category", nullable = true)
+    @JsonProperty
+    private String category;
 
     @CreationTimestamp
     @Column(name = "created_at")

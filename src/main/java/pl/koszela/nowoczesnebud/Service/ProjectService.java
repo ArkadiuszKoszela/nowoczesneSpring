@@ -86,22 +86,25 @@ public class ProjectService {
             // Wyczyść istniejące Input (orphanRemoval usunie je z bazy)
             existingProject.getInputs().clear();
             
-            // ⚠️ WAŻNE: Wszystkie Input są teraz z formularza (usunęliśmy pola produktowe)
+            // ⚠️ WAŻNE: Przesyłamy WSZYSTKIE Input (formularza + price-override + group-option)
             // Użyj formInputsToSave jeśli jest podana (z fillQuantitiesFromSnapshot),
             // w przeciwnym razie użyj project.getInputs()
             List<Input> inputsToProcess = formInputsToSave != null ? formInputsToSave :
                 (project.getInputs() != null ? project.getInputs() : new ArrayList<>());
             
+            // Policz typy Input dla debugowania
+            int formInputsCount = 0;
+            int priceOverridesCount = 0;
+            int groupOptionsCount = 0;
+            
             if (formInputsToSave != null) {
-                logger.debug("📥 Używam {} Input z formularza przekazanych bezpośrednio (z fillQuantitiesFromSnapshot)", 
+                logger.debug("📥 Używam {} Input przekazanych bezpośrednio (z fillQuantitiesFromSnapshot)", 
                            inputsToProcess.size());
             } else if (project.getInputs() != null) {
                 logger.debug("📥 Otrzymano {} Input w request", project.getInputs().size());
             }
             
             if (!inputsToProcess.isEmpty()) {
-                int inputsCount = 0;
-                
                 for (Input input : inputsToProcess) {
                     // ⚠️ WAŻNE: Wyczyść ID - zawsze tworzymy NOWE Input przy zapisie
                     input.setId(null);
@@ -109,9 +112,20 @@ public class ProjectService {
                     // Przypisz do projektu
                     input.setProject(existingProject);
                     
-                    inputsCount++;
-                    logger.debug("  📝 Input z formularza: '{}' (mapperName: '{}', quantity: {})", 
-                               input.getName(), input.getMapperName(), input.getQuantity());
+                    // Klasyfikuj typ Input
+                    if (input.getProductId() != null) {
+                        priceOverridesCount++;
+                        logger.debug("  📝 Price override: productId={}, manualQuantity={}, manualSellingPrice={}", 
+                                   input.getProductId(), input.getManualQuantity(), input.getManualSellingPrice());
+                    } else if (input.getGroupManufacturer() != null) {
+                        groupOptionsCount++;
+                        logger.debug("  📝 Group option: {} / {} → {}", 
+                                   input.getGroupManufacturer(), input.getGroupName(), input.getIsMainOption());
+                    } else if (input.getMapperName() != null) {
+                        formInputsCount++;
+                        logger.debug("  📝 Form input: '{}' (mapperName: '{}', quantity: {})", 
+                                   input.getName(), input.getMapperName(), input.getQuantity());
+                    }
                     
                     // Normalizuj quantity dla Input z formularza: null → 0.0
                     if (input.getQuantity() == null) {
@@ -122,7 +136,8 @@ public class ProjectService {
                     existingProject.getInputs().add(input);
                 }
                 
-                logger.info("💾 Zapisywanie projektu: {} Input z formularza", inputsCount);
+                logger.info("💾 Zapisywanie projektu: {} Input (formularza: {}, price-override: {}, group-option: {})", 
+                           inputsToProcess.size(), formInputsCount, priceOverridesCount, groupOptionsCount);
             } else {
                 logger.warn("⚠️ Brak Input do zapisania - inputsToProcess jest puste");
             }
@@ -255,6 +270,51 @@ public class ProjectService {
                 }
             }
         }
+    }
+
+    /**
+     * Aktualizuje dane klienta (User)
+     */
+    @Transactional
+    public User updateClient(User client) {
+        if (client == null || client.getId() == 0L) {
+            throw new IllegalArgumentException("Klient musi mieć ID");
+        }
+        
+        logger.info("🔄 Aktualizacja klienta ID: {}", client.getId());
+        
+        Optional<User> existingUserOpt = userRepository.findById(client.getId());
+        if (!existingUserOpt.isPresent()) {
+            throw new RuntimeException("Klient nie istnieje: " + client.getId());
+        }
+        
+        User existingUser = existingUserOpt.get();
+        
+        // Aktualizuj dane klienta
+        existingUser.setName(client.getName());
+        existingUser.setSurname(client.getSurname());
+        existingUser.setEmail(client.getEmail());
+        existingUser.setTelephoneNumber(client.getTelephoneNumber());
+        
+        // Aktualizuj adres jeśli jest podany
+        if (client.getAddress() != null) {
+            if (existingUser.getAddress() == null) {
+                existingUser.setAddress(client.getAddress());
+            } else {
+                // Aktualizuj istniejący adres
+                existingUser.getAddress().setAddress(client.getAddress().getAddress());
+                existingUser.getAddress().setLongitude(client.getAddress().getLongitude());
+                existingUser.getAddress().setLatitude(client.getAddress().getLatitude());
+                existingUser.getAddress().setZoom(client.getAddress().getZoom());
+            }
+        }
+        
+        existingUser.setDateOfMeeting(client.getDateOfMeeting());
+        
+        User savedUser = userRepository.save(existingUser);
+        logger.info("✅ Zaktualizowano klienta ID: {}", savedUser.getId());
+        
+        return savedUser;
     }
 
     /**

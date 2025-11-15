@@ -25,3 +25,9 @@ public interface PriceListSnapshotItemRepository extends JpaRepository<PriceList
 
 
 
+
+
+
+
+
+

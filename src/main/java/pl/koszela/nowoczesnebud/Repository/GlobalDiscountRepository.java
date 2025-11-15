@@ -81,3 +81,9 @@ public interface GlobalDiscountRepository extends JpaRepository<GlobalDiscount, 
 
 
 
+
+
+
+
+
+

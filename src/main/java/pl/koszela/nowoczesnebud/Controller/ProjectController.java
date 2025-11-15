@@ -9,11 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import pl.koszela.nowoczesnebud.CreateOffer.CreateOffer;
 import pl.koszela.nowoczesnebud.DTO.GroupOptionRequest;
-import pl.koszela.nowoczesnebud.Model.Input;
-import pl.koszela.nowoczesnebud.Model.PriceListSnapshotItem;
-import pl.koszela.nowoczesnebud.Model.Product;
-import pl.koszela.nowoczesnebud.Model.ProductCategory;
-import pl.koszela.nowoczesnebud.Model.Project;
+import pl.koszela.nowoczesnebud.Model.*;
 import pl.koszela.nowoczesnebud.Repository.InputRepository;
 import pl.koszela.nowoczesnebud.Repository.ProductRepository;
 import pl.koszela.nowoczesnebud.Service.PriceCalculationService;
@@ -382,6 +378,25 @@ public class ProjectController {
     }
 
     /**
+     * Aktualizuje dane klienta (User)
+     */
+    @PutMapping("/client/{userId}")
+    public ResponseEntity<User> updateClient(@PathVariable Long userId, @RequestBody User client) {
+        try {
+            if (!userId.equals(client.getId())) {
+                logger.warn("Niezgodność ID w ścieżce ({}) i body ({})", userId, client.getId());
+                return ResponseEntity.badRequest().build();
+            }
+            
+            User updatedClient = projectService.updateClient(client);
+            return ResponseEntity.ok(updatedClient);
+        } catch (Exception e) {
+            logger.error("Błąd podczas aktualizacji klienta: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
      * Usuwa klienta (User) wraz z wszystkimi jego projektami
      */
     @DeleteMapping("/client/{userId}")
@@ -493,6 +508,11 @@ public class ProjectController {
                     product.setMarginPercent(item.getMarginPercent() != null ? item.getMarginPercent() : 0.0);
                     product.setUnit(item.getUnit());
                     product.setQuantityConverter(item.getQuantityConverter() != null ? item.getQuantityConverter() : 1.0);
+                    
+                    // Kopiuj accessoryType (dla ACCESSORY)
+                    if (item.getCategory() == ProductCategory.ACCESSORY) {
+                        product.setAccessoryType(item.getAccessoryType());
+                    }
                     
                     // Obsługa opcji grupy - najpierw ustaw ze snapshotu, potem nadpisz z Input jeśli istnieje
                     product.setIsMainOption(item.getIsMainOption());
@@ -776,24 +796,9 @@ public class ProjectController {
                 products.add(product);
             }
             
-            // ⚠️ WAŻNE: Wszystkie Input są teraz z formularza (usunęliśmy pola produktowe)
-            // ⚠️ WAŻNE: NIE używaj project.setInputs() - to powoduje błąd Hibernate "collection no longer referenced"
-            // Zamiast tego przekaż formInputs bezpośrednio do save() jako osobny parametr
-            // Upewnij się że każdy Input ma poprawne dane
-            for (Input input : formInputs) {
-                input.setId(null); // Zawsze nowe Input przy zapisie
-                // ⚠️ WAŻNE: NIE ustawiaj input.setProject() tutaj - ProjectService zrobi to w save()
-            }
-            logger.info("📝 Zapisuję tylko {} Input z formularza (bez produktów)", formInputs.size());
-            logger.debug("📝 Input z formularza przed zapisem: {}", formInputs.stream()
-                .map(i -> String.format("%s=%s", i.getMapperName(), i.getQuantity()))
-                .collect(Collectors.joining(", ")));
-            
-            // ⚠️ WAŻNE: Przekaż formInputs bezpośrednio jako parametr, NIE przez project.setInputs()
-            // To unika problemu z Hibernate "collection no longer referenced"
-            projectService.save(project, formInputs);
-            
-            logger.info("✅ Zapisano projekt z {} Input z formularza", formInputs.size());
+            // ⚠️ WAŻNE: NIE zapisujemy inputów do bazy - użytkownik musi kliknąć "Zapisz projekt"
+            // Endpoint tylko oblicza i zwraca produkty z quantity dla frontendu
+            logger.info("✅ Obliczono produkty - NIE zapisano do bazy (użytkownik musi kliknąć 'Zapisz projekt')");
             
             // Policz ile produktów ma quantity > 0
             long productsWithQuantity = products.stream()
@@ -873,4 +878,5 @@ public class ProjectController {
         }
     }
 }
+
 

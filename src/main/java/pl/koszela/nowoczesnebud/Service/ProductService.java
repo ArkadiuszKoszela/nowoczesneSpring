@@ -38,19 +38,22 @@ public class ProductService {
     private final GlobalDiscountService globalDiscountService;
     private final ProductValidationService productValidationService;
     private final PriceListSnapshotService priceListSnapshotService;
+    private final pl.koszela.nowoczesnebud.Repository.ProductGroupAttributesRepository productGroupAttributesRepository;
 
     public ProductService(ProductRepository productRepository,
                          ProductImportService productImportService,
                          PriceCalculationService priceCalculationService,
                          GlobalDiscountService globalDiscountService,
                          ProductValidationService productValidationService,
-                         PriceListSnapshotService priceListSnapshotService) {
+                         PriceListSnapshotService priceListSnapshotService,
+                         pl.koszela.nowoczesnebud.Repository.ProductGroupAttributesRepository productGroupAttributesRepository) {
         this.productRepository = productRepository;
         this.productImportService = productImportService;
         this.priceCalculationService = priceCalculationService;
         this.globalDiscountService = globalDiscountService;
         this.productValidationService = productValidationService;
         this.priceListSnapshotService = priceListSnapshotService;
+        this.productGroupAttributesRepository = productGroupAttributesRepository;
     }
 
     /**
@@ -157,6 +160,149 @@ public class ProductService {
      */
     public List<String> getGroupNames(ProductCategory category, String manufacturer) {
         return productRepository.findDistinctGroupNamesByCategoryAndManufacturer(category, manufacturer);
+    }
+
+    /**
+     * Pobierz słownik sugestii atrybutów dla autouzupełniania
+     * Parsuje attributes JSON ze wszystkich GRUP PRODUKTOWYCH danej kategorii
+     * i zbiera unikalne klucze i wartości
+     * 
+     * @param category Kategoria produktu (TILE, GUTTER, ACCESSORY)
+     * @return Mapa: {"kolor": ["czerwony","brązowy"], "kształt": ["płaska","karpiówka"]}
+     */
+    public Map<String, List<String>> getAttributeSuggestions(ProductCategory category) {
+        logger.debug("Pobieranie słownika atrybutów dla kategorii: {}", category);
+        
+        // Mapa wynikowa: klucz atrybutu -> lista unikalnych wartości
+        Map<String, Set<String>> attributeMap = new HashMap<>();
+        
+        // Pobierz wszystkie atrybuty GRUP produktowych dla danej kategorii
+        List<pl.koszela.nowoczesnebud.Model.ProductGroupAttributes> groupAttributes = 
+            productGroupAttributesRepository.findByCategory(category);
+        logger.debug("Znaleziono {} grup z atrybutami w kategorii {}", groupAttributes.size(), category);
+        
+        // Parsuj atrybuty JSON dla każdej grupy
+        for (pl.koszela.nowoczesnebud.Model.ProductGroupAttributes group : groupAttributes) {
+            String attributesJson = group.getAttributes();
+            
+            // Pomiń grupy bez atrybutów
+            if (attributesJson == null || attributesJson.trim().isEmpty()) {
+                continue;
+            }
+            
+            try {
+                // Parsuj JSON do mapy
+                // Przykład: {"kolor":["czerwony","brązowy"],"kształt":["płaska"]}
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                @SuppressWarnings("unchecked")
+                Map<String, List<String>> groupAttributesMap = mapper.readValue(
+                    attributesJson,
+                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, List<String>>>() {}
+                );
+                
+                // Dodaj wszystkie klucze i wartości do attributeMap
+                for (Map.Entry<String, List<String>> entry : groupAttributesMap.entrySet()) {
+                    String attributeKey = entry.getKey();
+                    List<String> attributeValues = entry.getValue();
+                    
+                    // Dodaj wartości do zbioru (automatycznie usuwa duplikaty)
+                    attributeMap.computeIfAbsent(attributeKey, k -> new java.util.HashSet<>())
+                               .addAll(attributeValues);
+                }
+            } catch (Exception e) {
+                logger.warn("Błąd parsowania atrybutów dla grupy {}/{}: {}", 
+                    group.getManufacturer(), group.getGroupName(), e.getMessage());
+            }
+        }
+        
+        // Konwertuj Set<String> na List<String> i posortuj alfabetycznie
+        Map<String, List<String>> result = new HashMap<>();
+        for (Map.Entry<String, Set<String>> entry : attributeMap.entrySet()) {
+            List<String> sortedValues = entry.getValue().stream()
+                .sorted()
+                .collect(Collectors.toList());
+            result.put(entry.getKey(), sortedValues);
+        }
+        
+        logger.debug("Zwracam słownik z {} atrybutami", result.size());
+        return result;
+    }
+
+    /**
+     * Pobierz atrybuty dla konkretnej grupy produktowej
+     * 
+     * @param category Kategoria produktu
+     * @param manufacturer Producent
+     * @param groupName Nazwa grupy
+     * @return JSON string z atrybutami lub null jeśli brak
+     */
+    public String getGroupAttributes(ProductCategory category, String manufacturer, String groupName) {
+        logger.debug("Pobieranie atrybutów dla grupy: {}/{}/{}", category, manufacturer, groupName);
+        
+        java.util.Optional<pl.koszela.nowoczesnebud.Model.ProductGroupAttributes> result = 
+            productGroupAttributesRepository.findByCategoryAndManufacturerAndGroupName(
+                category,
+                manufacturer,
+                groupName
+            );
+        
+        if (result.isPresent()) {
+            String attributes = result.get().getAttributes();
+            logger.debug("Znaleziono atrybuty dla grupy: {}", attributes);
+            return attributes;
+        } else {
+            logger.debug("Brak atrybutów dla grupy: {}/{}/{}", category, manufacturer, groupName);
+            return null;
+        }
+    }
+
+    /**
+     * Zapisz/zaktualizuj atrybuty dla grupy produktowej
+     */
+    @Transactional
+    public void saveGroupAttributes(pl.koszela.nowoczesnebud.DTO.GroupAttributesRequest request) {
+        logger.info("Zapisywanie atrybutów dla grupy: {}/{}/{}", 
+            request.getCategory(), request.getManufacturer(), request.getGroupName());
+
+        // Znajdź istniejący rekord lub utwórz nowy
+        pl.koszela.nowoczesnebud.Model.ProductGroupAttributes groupAttributes = 
+            productGroupAttributesRepository.findByCategoryAndManufacturerAndGroupName(
+                request.getCategory(),
+                request.getManufacturer(),
+                request.getGroupName()
+            ).orElse(new pl.koszela.nowoczesnebud.Model.ProductGroupAttributes());
+
+        // Ustaw wartości
+        groupAttributes.setCategory(request.getCategory());
+        groupAttributes.setManufacturer(request.getManufacturer());
+        groupAttributes.setGroupName(request.getGroupName());
+
+        // Konwertuj Map<String, List<String>> do JSON String
+        if (request.getAttributes() != null && !request.getAttributes().isEmpty()) {
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                String attributesJson = mapper.writeValueAsString(request.getAttributes());
+                groupAttributes.setAttributes(attributesJson);
+                
+                logger.debug("Zapisano atrybuty JSON: {}", attributesJson);
+            } catch (Exception e) {
+                logger.error("Błąd konwersji atrybutów do JSON: {}", e.getMessage(), e);
+                throw new RuntimeException("Błąd konwersji atrybutów do JSON", e);
+            }
+        } else {
+            // Jeśli brak atrybutów, usuń rekord
+            if (groupAttributes.getId() != null) {
+                logger.info("Usuwanie atrybutów dla grupy: {}/{}/{}", 
+                    request.getCategory(), request.getManufacturer(), request.getGroupName());
+                productGroupAttributesRepository.delete(groupAttributes);
+                return;
+            }
+        }
+
+        // Zapisz
+        productGroupAttributesRepository.save(groupAttributes);
+        logger.info("Zapisano atrybuty dla grupy: {}/{}/{}", 
+            request.getCategory(), request.getManufacturer(), request.getGroupName());
     }
 
     /**
