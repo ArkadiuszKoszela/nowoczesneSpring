@@ -60,16 +60,25 @@ public class Product {
     @ExcelCellName("mapperName")
     private String mapperName;
 
-    // === RABATY ===
+    // === RABAT ===
+    @ExcelCellName("rabat")  // Nazwa dla kompatybilności z importem
+    private Double discount = 0.0;  // Jeden rabat (procent) - obliczany z 4 rabatów w zarządzaniu rabatami
+    
+    // === METODA OBLICZANIA RABATU ===
+    @Enumerated(EnumType.STRING)
+    @Column(name = "discount_calculation_method")
+    private DiscountCalculationMethod discountCalculationMethod;  // Metoda obliczania końcowego rabatu
+    
+    // === SKŁADOWE RABATY (dla zarządzania i importu/exportu) ===
     @ExcelCellName("basicDisc")  // Stara nazwa dla kompatybilności z importem
     private Integer basicDiscount = 0;
-
+    
     @ExcelCellName("promotion")  // Stara nazwa dla kompatybilności z importem
     private Integer promotionDiscount = 0;
-
+    
     @ExcelCellName("additional")  // Stara nazwa dla kompatybilności z importem
     private Integer additionalDiscount = 0;
-
+    
     @ExcelCellName("skonto")
     private Integer skontoDiscount = 0;
 

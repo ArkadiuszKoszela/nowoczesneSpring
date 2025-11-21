@@ -2,6 +2,7 @@ package pl.koszela.nowoczesnebud.Model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
+import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -15,6 +16,7 @@ import java.util.List;
  * Relacja: Jeden Client (User) → Wiele Projektów
  */
 @Data
+@ToString(exclude = {"inputs", "projectProducts", "projectProductGroups"}) // ⚠️ Wyklucz cykliczne referencje z toString()
 @Entity
 @Table(name = "projects") // Nazwa tabeli w bazie
 @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
@@ -82,13 +84,6 @@ public class Project {
     @Column(name = "accessories_discount")
     private Double accessoriesDiscount = 0.0;
     
-    /**
-     * Data snapshotu cennika użytego w projekcie
-     * Projekty używają snapshotu z tej daty (lub najbliższego wcześniejszego)
-     * Domyślnie = createdAt projektu
-     */
-    @Column(name = "snapshot_date")
-    private LocalDateTime snapshotDate;
     
     /**
      * RELACJA: Jeden projekt → Wiele inputów
@@ -99,6 +94,22 @@ public class Project {
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JsonIgnoreProperties({"project", "hibernateLazyInitializer", "handler"})
     private List<Input> inputs = new ArrayList<>();
+    
+    /**
+     * RELACJA: Jeden projekt → Wiele produktów (zapisane ceny i ilości)
+     * ProjectProduct przechowuje zapisane ceny produktów z momentu ostatniego zapisu projektu
+     */
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"project", "hibernateLazyInitializer", "handler"})
+    private List<ProjectProduct> projectProducts = new ArrayList<>();
+    
+    /**
+     * RELACJA: Jeden projekt → Wiele grup produktowych (opcje Główna/Opcjonalna)
+     * ProjectProductGroup przechowuje opcje dla grup produktowych (np. CANTUS-czarna vs CANTUS-grafitowa)
+     */
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"project", "hibernateLazyInitializer", "handler"})
+    private List<ProjectProductGroup> projectProductGroups = new ArrayList<>();
     
     @CreationTimestamp
     private LocalDateTime createdAt;

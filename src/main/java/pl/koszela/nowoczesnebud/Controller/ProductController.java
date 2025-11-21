@@ -252,7 +252,8 @@ public class ProductController {
             request.getBasicDiscount(),
             request.getPromotionDiscount(),
             request.getAdditionalDiscount(),
-            request.getSkontoDiscount()
+            request.getSkontoDiscount(),
+            request.getDiscountCalculationMethod()
         );
 
         if (product == null) {
@@ -343,7 +344,8 @@ public class ProductController {
             request.getAdditionalDiscount(),
             request.getPromotionDiscount(),
             request.getSkontoDiscount(),
-            request.getProductType() // Dodaj typ produktu
+            request.getProductType(),
+            request.getDiscountCalculationMethod() // Metoda obliczania rabatu
         );
         
         return ResponseEntity.ok(updatedProducts);
@@ -376,6 +378,18 @@ public class ProductController {
         logger.warn("🗑️ Request usunięcia grupy produktów: {} / {} / {}", category, manufacturer, groupName);
         productService.deleteAllByGroup(category, manufacturer, groupName);
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Usuń wszystkie produkty dla kategorii (dla testów E2E)
+     * DELETE /api/products/all?category=TILE
+     */
+    @DeleteMapping("/all")
+    public ResponseEntity<Void> deleteAllByCategory(@RequestParam ProductCategory category) {
+        logger.info("🗑️ Usuwanie wszystkich produktów dla kategorii: {}", category);
+        productService.deleteAllByCategory(category);
+        logger.info("✅ Wszystkie produkty kategorii {} zostały usunięte", category);
+        return ResponseEntity.noContent().build();
     }
 
     /**

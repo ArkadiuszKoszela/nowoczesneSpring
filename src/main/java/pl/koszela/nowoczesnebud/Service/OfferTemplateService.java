@@ -24,14 +24,11 @@ public class OfferTemplateService {
     
     private final OfferTemplateRepository templateRepository;
     private final SpringTemplateEngine templateEngine;
-    private final PriceListSnapshotService priceListSnapshotService;
 
     public OfferTemplateService(OfferTemplateRepository templateRepository,
-                               @Qualifier("stringTemplateEngine") SpringTemplateEngine templateEngine,
-                               PriceListSnapshotService priceListSnapshotService) {
+                               @Qualifier("stringTemplateEngine") SpringTemplateEngine templateEngine) {
         this.templateRepository = templateRepository;
         this.templateEngine = templateEngine;
-        this.priceListSnapshotService = priceListSnapshotService;
     }
 
     /**

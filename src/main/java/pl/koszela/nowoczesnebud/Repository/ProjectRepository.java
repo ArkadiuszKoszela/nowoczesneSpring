@@ -6,7 +6,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import pl.koszela.nowoczesnebud.Model.Project;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -47,11 +46,6 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     @Query("SELECT DISTINCT p FROM Project p JOIN FETCH p.client LEFT JOIN FETCH p.inputs WHERE p.id = :id")
     Optional<Project> findByIdWithClientAndInputs(@Param("id") Long id);
     
-    /**
-     * Sprawdź czy istnieje projekt z snapshot_date równym podanej dacie
-     * Używane do sprawdzania czy snapshot jest używany przez projekt
-     */
-    @Query("SELECT COUNT(p) > 0 FROM Project p WHERE p.snapshotDate = :snapshotDate")
-    boolean existsBySnapshotDate(@Param("snapshotDate") LocalDateTime snapshotDate);
+    // TODO: Metoda existsBySnapshotDate została usunięta - snapshotDate nie istnieje w nowym modelu
 }
 

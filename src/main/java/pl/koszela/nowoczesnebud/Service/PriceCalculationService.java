@@ -14,8 +14,8 @@ import java.math.RoundingMode;
 public class PriceCalculationService {
 
     /**
-     * Kalkulacja ceny zakupu po rabatach
-     * Źródło: ProductTypeService.calculatePurchasePrice()
+     * Kalkulacja ceny zakupu po rabacie
+     * Cena zakupu = cena katalogowa * (1 - rabat/100)
      */
     public double calculatePurchasePrice(Product product) {
         double price = product.getRetailPrice();
@@ -23,11 +23,8 @@ public class PriceCalculationService {
             return 0.00;
         }
 
-        double purchasePrice = price 
-            * calculatePercentage(product.getBasicDiscount())
-            * calculatePercentage(product.getAdditionalDiscount())
-            * calculatePercentage(product.getPromotionDiscount())
-            * calculatePercentage(product.getSkontoDiscount());
+        double discountPercent = product.getDiscount() != null ? product.getDiscount() : 0.0;
+        double purchasePrice = price * (1 - discountPercent / 100.0);
 
         return setScale(purchasePrice);
     }
@@ -73,12 +70,6 @@ public class PriceCalculationService {
         return setScale(quantity);
     }
 
-    /**
-     * Przeliczenie procentu na współczynnik
-     */
-    private double calculatePercentage(int discountPercent) {
-        return (100 - discountPercent) / 100.0;
-    }
 
     /**
      * Zaokrąglenie - DOKŁADNIE TA SAMA LOGIKA
@@ -90,6 +81,9 @@ public class PriceCalculationService {
             .doubleValue();
     }
 }
+
+
+
 
 
 

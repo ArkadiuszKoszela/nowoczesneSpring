@@ -7,7 +7,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import pl.koszela.nowoczesnebud.Model.GlobalDiscount;
 import pl.koszela.nowoczesnebud.Model.Input;
-import pl.koszela.nowoczesnebud.Model.PriceListSnapshot;
 import pl.koszela.nowoczesnebud.Model.Product;
 import pl.koszela.nowoczesnebud.Model.ProductCategory;
 import pl.koszela.nowoczesnebud.Repository.ProductRepository;
@@ -37,23 +36,23 @@ public class ProductService {
     private final PriceCalculationService priceCalculationService;
     private final GlobalDiscountService globalDiscountService;
     private final ProductValidationService productValidationService;
-    private final PriceListSnapshotService priceListSnapshotService;
     private final pl.koszela.nowoczesnebud.Repository.ProductGroupAttributesRepository productGroupAttributesRepository;
+    private final DiscountCalculationService discountCalculationService;
 
     public ProductService(ProductRepository productRepository,
                          ProductImportService productImportService,
                          PriceCalculationService priceCalculationService,
                          GlobalDiscountService globalDiscountService,
                          ProductValidationService productValidationService,
-                         PriceListSnapshotService priceListSnapshotService,
-                         pl.koszela.nowoczesnebud.Repository.ProductGroupAttributesRepository productGroupAttributesRepository) {
+                         pl.koszela.nowoczesnebud.Repository.ProductGroupAttributesRepository productGroupAttributesRepository,
+                         DiscountCalculationService discountCalculationService) {
         this.productRepository = productRepository;
         this.productImportService = productImportService;
         this.priceCalculationService = priceCalculationService;
         this.globalDiscountService = globalDiscountService;
         this.productValidationService = productValidationService;
-        this.priceListSnapshotService = priceListSnapshotService;
         this.productGroupAttributesRepository = productGroupAttributesRepository;
+        this.discountCalculationService = discountCalculationService;
     }
 
     /**
@@ -98,16 +97,7 @@ public class ProductService {
             List<Product> savedProducts = productRepository.saveAll(newProducts);
             System.out.println("📦 Zaimportowano " + savedProducts.size() + " nowych produktów (pominięto " + (importedProducts.size() - newProducts.size()) + " duplikatów)");
             
-            // ⚠️ WAŻNE: Po imporcie utwórz snapshot cennika dla kategorii
-            // Snapshot będzie używany przez projekty utworzone po tym imporcie
-            logger.info("📸 Tworzenie snapshotu cennika dla kategorii {} po imporcie", category);
-            try {
-                priceListSnapshotService.createSnapshotForDate(java.time.LocalDateTime.now(), category);
-                logger.info("✅ Snapshot cennika utworzony dla kategorii {}", category);
-            } catch (Exception e) {
-                logger.error("❌ Błąd tworzenia snapshotu cennika dla kategorii {}: {}", category, e.getMessage(), e);
-                // Nie przerywamy - import się powiódł, tylko snapshot się nie utworzył
-            }
+            // TODO: Snapshoty zostały usunięte - projekty będą przechowywać zapisane ceny w ProjectProduct
             
             return savedProducts;
         } else {
@@ -409,10 +399,7 @@ public class ProductService {
         copy.setUnit(original.getUnit());
         copy.setQuantity(original.getQuantity());
         copy.setQuantityConverter(original.getQuantityConverter());
-        copy.setBasicDiscount(original.getBasicDiscount());
-        copy.setPromotionDiscount(original.getPromotionDiscount());
-        copy.setAdditionalDiscount(original.getAdditionalDiscount());
-        copy.setSkontoDiscount(original.getSkontoDiscount());
+        copy.setDiscount(original.getDiscount());
         copy.setMarginPercent(original.getMarginPercent());
         copy.setIsMainOption(original.getIsMainOption());
         copy.setAccessoryType(original.getAccessoryType());
@@ -428,7 +415,8 @@ public class ProductService {
                                          Integer basicDiscount,
                                          Integer promotionDiscount,
                                          Integer additionalDiscount,
-                                         Integer skontoDiscount) {
+                                         Integer skontoDiscount,
+                                         pl.koszela.nowoczesnebud.Model.DiscountCalculationMethod discountCalculationMethod) {
         
         Optional<Product> optProduct = productRepository.findById(productId);
         if (!optProduct.isPresent()) {
@@ -437,10 +425,28 @@ public class ProductService {
 
         Product product = optProduct.get();
         
+        if (discountCalculationMethod == null) {
+            throw new IllegalArgumentException("Metoda obliczania rabatu jest wymagana");
+        }
+        
+        // Oblicz końcowy rabat używając wybranej metody
+        double finalDiscount = discountCalculationService.calculateDiscount(
+            discountCalculationMethod,
+            basicDiscount,
+            additionalDiscount,
+            promotionDiscount,
+            skontoDiscount
+        );
+        
+        // Zapisz składowe rabaty
         if (basicDiscount != null) product.setBasicDiscount(basicDiscount);
-        if (promotionDiscount != null) product.setPromotionDiscount(promotionDiscount);
         if (additionalDiscount != null) product.setAdditionalDiscount(additionalDiscount);
+        if (promotionDiscount != null) product.setPromotionDiscount(promotionDiscount);
         if (skontoDiscount != null) product.setSkontoDiscount(skontoDiscount);
+        
+        // Zapisz metodę obliczania i końcowy rabat
+        product.setDiscountCalculationMethod(discountCalculationMethod);
+        product.setDiscount(finalDiscount);
 
         // Przelicz cenę zakupu
         double purchasePrice = priceCalculationService.calculatePurchasePrice(product);
@@ -687,20 +693,56 @@ public class ProductService {
         logger.info("📊 Rozdzielono produkty: {} do aktualizacji, {} do utworzenia", 
             productsToUpdate.size(), productsToCreate.size());
         
-        // ⚠️ WAŻNE: Przelicz cenę zakupu dla wszystkich produktów przed zapisem
-        // Jeśli zmieniono rabaty lub cenę katalogową, automatycznie przelicza cenę zakupu
+        // ⚠️ WAŻNE: Przelicz cenę zakupu TYLKO jeśli użytkownik zmienił cenę katalogową lub rabaty
+        // Jeśli użytkownik ręcznie zmienił cenę zakupu, użyj wartości z frontendu
         int recalculatedCount = 0;
+        int preservedCount = 0;
         for (Product product : products) {
             if (product.getRetailPrice() != null && product.getRetailPrice() > 0) {
-                double purchasePrice = priceCalculationService.calculatePurchasePrice(product);
-                product.setPurchasePrice(purchasePrice);
-                recalculatedCount++;
-                logger.debug("Przeliczono cenę zakupu dla produktu ID {}: {} → {}", 
-                    product.getId(), product.getRetailPrice(), purchasePrice);
+                // Sprawdź czy produkt istnieje w bazie (ma ID i jest w existingProducts)
+                Product existingProduct = null;
+                if (product.getId() != null && existingIdsSet.contains(product.getId())) {
+                    existingProduct = existingProducts.stream()
+                        .filter(ep -> ep.getId().equals(product.getId()))
+                        .findFirst()
+                        .orElse(null);
+                }
+                
+                // Oblicz nową cenę zakupu na podstawie aktualnych wartości
+                double calculatedPurchasePrice = priceCalculationService.calculatePurchasePrice(product);
+                
+                // Jeśli produkt istnieje w bazie, sprawdź czy użytkownik ręcznie zmienił cenę zakupu
+                if (existingProduct != null) {
+                    double newPurchasePrice = product.getPurchasePrice() != null ? product.getPurchasePrice() : 0.0;
+                    
+                    // Jeśli nowa cena zakupu różni się od obliczonej (więcej niż 0.01), 
+                    // oznacza to że użytkownik ręcznie zmienił cenę zakupu - zachowaj ją
+                    if (Math.abs(newPurchasePrice - calculatedPurchasePrice) > 0.01) {
+                        // Użytkownik ręcznie zmienił cenę zakupu - zachowaj wartość z frontendu
+                        preservedCount++;
+                        logger.debug("Zachowano ręcznie zmienioną cenę zakupu dla produktu ID {}: {} (obliczona: {})", 
+                            product.getId(), newPurchasePrice, calculatedPurchasePrice);
+                    } else {
+                        // Cena zakupu jest zgodna z obliczoną - użyj obliczonej wartości
+                        product.setPurchasePrice(calculatedPurchasePrice);
+                        recalculatedCount++;
+                        logger.debug("Przeliczono cenę zakupu dla produktu ID {}: {} → {}", 
+                            product.getId(), product.getRetailPrice(), calculatedPurchasePrice);
+                    }
+                } else {
+                    // Nowy produkt (nie istnieje w bazie) - zawsze przelicz cenę zakupu
+                    product.setPurchasePrice(calculatedPurchasePrice);
+                    recalculatedCount++;
+                    logger.debug("Przeliczono cenę zakupu dla nowego produktu: {} → {}", 
+                        product.getRetailPrice(), calculatedPurchasePrice);
+                }
             }
         }
         if (recalculatedCount > 0) {
             logger.info("💰 Przeliczono cenę zakupu dla {} produktów", recalculatedCount);
+        }
+        if (preservedCount > 0) {
+            logger.info("💾 Zachowano ręcznie zmienioną cenę zakupu dla {} produktów", preservedCount);
         }
         
         // Zapisz wszystkie w jednej transakcji
@@ -729,36 +771,14 @@ public class ProductService {
                 .distinct()
                 .collect(Collectors.toSet());
         
-        if (!changedCategories.isEmpty()) {
-            LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
-            logger.info("📸 Tworzenie snapshotów dla kategorii: {}", changedCategories);
-            
-            // Zapisz ID nowo utworzonych snapshotów aby wykluczyć je z usuwania
-            List<Long> newlyCreatedSnapshotIds = new ArrayList<>();
-            
-            for (ProductCategory category : changedCategories) {
-                try {
-                    PriceListSnapshot newSnapshot = priceListSnapshotService.createSnapshotForDate(now, category);
-                    newlyCreatedSnapshotIds.add(newSnapshot.getId());
-                    logger.info("  ✅ Utworzono snapshot ID {} dla kategorii {}", newSnapshot.getId(), category);
-                } catch (Exception e) {
-                    logger.error("  ❌ Błąd tworzenia snapshotu dla kategorii {}: {}", category, e.getMessage(), e);
-                }
-            }
-            
-            // Wyczyść nieużywane snapshoty (wykluczając nowo utworzone)
-            try {
-                priceListSnapshotService.deleteUnusedSnapshots(newlyCreatedSnapshotIds);
-            } catch (Exception e) {
-                logger.error("❌ Błąd podczas czyszczenia nieużywanych snapshotów: {}", e.getMessage(), e);
-            }
-        }
+        // TODO: Snapshoty zostały usunięte - projekty będą teraz przechowywać zapisane ceny w ProjectProduct
         
         return saved;
     }
 
     /**
      * BULK DISCOUNT UPDATE - zmień rabaty dla całej grupy
+     * Oblicza końcowy rabat na podstawie wybranej metody i zapisuje do pola "discount"
      */
     @Transactional
     public List<Product> updateGroupDiscounts(
@@ -769,7 +789,8 @@ public class ProductService {
             Integer additionalDiscount,
             Integer promotionDiscount,
             Integer skontoDiscount,
-            String productType) {
+            String productType,
+            pl.koszela.nowoczesnebud.Model.DiscountCalculationMethod discountCalculationMethod) {
         
         logger.info("🎯 Bulk discount update:");
         logger.info("  Kategoria: {}", category);
@@ -778,6 +799,21 @@ public class ProductService {
         logger.info("  Typ produktu: {}", productType != null ? productType : "WSZYSTKIE");
         logger.info("  Rabaty: basic={}, additional={}, promotion={}, skonto={}",
                    basicDiscount, additionalDiscount, promotionDiscount, skontoDiscount);
+        logger.info("  Metoda obliczania: {}", discountCalculationMethod);
+        
+        if (discountCalculationMethod == null) {
+            throw new IllegalArgumentException("Metoda obliczania rabatu jest wymagana");
+        }
+        
+        // Oblicz końcowy rabat używając wybranej metody
+        double finalDiscount = discountCalculationService.calculateDiscount(
+            discountCalculationMethod,
+            basicDiscount,
+            additionalDiscount,
+            promotionDiscount,
+            skontoDiscount
+        );
+        logger.info("  → Końcowy rabat: {}%", finalDiscount);
         
         // Pobierz wszystkie produkty - jeśli groupName jest null, to dla całego producenta
         List<Product> products = productRepository.findByCategory(category).stream()
@@ -798,18 +834,24 @@ public class ProductService {
         String typeInfo = productType != null ? " typu " + productType : "";
         logger.info("📦 Znaleziono {} produktów{}", products.size(), typeInfo);
         
-        // Zastosuj rabaty do wszystkich
+        // Zastosuj rabaty do wszystkich produktów
         for (Product product : products) {
+            // Zapisz składowe rabaty
             if (basicDiscount != null) product.setBasicDiscount(basicDiscount);
             if (additionalDiscount != null) product.setAdditionalDiscount(additionalDiscount);
             if (promotionDiscount != null) product.setPromotionDiscount(promotionDiscount);
             if (skontoDiscount != null) product.setSkontoDiscount(skontoDiscount);
             
+            // Zapisz metodę obliczania i końcowy rabat
+            product.setDiscountCalculationMethod(discountCalculationMethod);
+            product.setDiscount(finalDiscount);
+            
             // Przelicz cenę zakupu
             double purchasePrice = priceCalculationService.calculatePurchasePrice(product);
             product.setPurchasePrice(purchasePrice);
             
-            logger.debug("  ✓ {} - nowa cena zakupu: {}", product.getName(), purchasePrice);
+            logger.debug("  ✓ {} - rabat: {}%, metoda: {}, nowa cena zakupu: {}", 
+                        product.getName(), finalDiscount, discountCalculationMethod, purchasePrice);
         }
         
         // Zapisz wszystkie
@@ -817,6 +859,19 @@ public class ProductService {
         logger.info("✅ Zaktualizowano rabaty dla {} produktów", saved.size());
         
         return saved;
+    }
+
+    /**
+     * Usuń wszystkie produkty danej kategorii (dla testów E2E)
+     */
+    @Transactional
+    public void deleteAllByCategory(ProductCategory category) {
+        logger.warn("🗑️ Usuwanie WSZYSTKICH produktów kategorii: {}", category);
+        
+        List<Product> products = productRepository.findByCategory(category);
+        productRepository.deleteAll(products);
+        
+        logger.info("✅ Usunięto {} produktów kategorii {}", products.size(), category);
     }
 
     /**

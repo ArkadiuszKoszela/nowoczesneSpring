@@ -6,6 +6,7 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import pl.koszela.nowoczesnebud.Model.DiscountCalculationMethod;
 import pl.koszela.nowoczesnebud.Model.Product;
 import pl.koszela.nowoczesnebud.Model.ProductCategory;
 
@@ -22,9 +23,12 @@ import java.util.*;
 public class ProductImportService {
 
     private final PriceCalculationService priceCalculationService;
+    private final DiscountCalculationService discountCalculationService;
 
-    public ProductImportService(PriceCalculationService priceCalculationService) {
+    public ProductImportService(PriceCalculationService priceCalculationService,
+                               DiscountCalculationService discountCalculationService) {
         this.priceCalculationService = priceCalculationService;
+        this.discountCalculationService = discountCalculationService;
     }
 
     /**
@@ -375,6 +379,11 @@ public class ProductImportService {
             columnMapping.put("skonto", "skonto");
             columnMapping.put("skontoDiscount", "skonto");
             
+            // Sposób obliczania rabatu
+            columnMapping.put("Sposób obliczania rabatu", "discountCalculationMethod");
+            columnMapping.put("discountCalculationMethod", "discountCalculationMethod");
+            columnMapping.put("Discount Calculation Method", "discountCalculationMethod");
+            
             // Różne dla różnych kategorii
             if (category == ProductCategory.ACCESSORY) {
                 // AKCESORIA: Jednostka zamiast Przelicznik, plus Typ
@@ -465,11 +474,12 @@ public class ProductImportService {
                 return;
             }
             
-            // Znajdź indeksy kolumn z rabatami
+            // Znajdź indeksy kolumn z rabatami i metodą obliczania
             int basicDiscIndex = -1;
             int additionalIndex = -1;
             int promotionIndex = -1;
             int skontoIndex = -1;
+            int discountCalculationMethodIndex = -1;
             
             for (int i = 0; i < headerRow.getLastCellNum(); i++) {
                 Cell cell = headerRow.getCell(i);
@@ -483,6 +493,8 @@ public class ProductImportService {
                         promotionIndex = i;
                     } else if (headerName.equals("skonto")) {
                         skontoIndex = i;
+                    } else if (headerName.equals("discountCalculationMethod")) {
+                        discountCalculationMethodIndex = i;
                     }
                 }
             }
@@ -490,7 +502,8 @@ public class ProductImportService {
             System.out.println("🔍 Indeksy kolumn rabatów: basicDisc=" + basicDiscIndex + 
                              ", additional=" + additionalIndex + 
                              ", promotion=" + promotionIndex + 
-                             ", skonto=" + skontoIndex);
+                             ", skonto=" + skontoIndex +
+                             ", discountCalculationMethod=" + discountCalculationMethodIndex);
             
             // Uzupełnij rabaty dla każdego produktu
             for (int rowIndex = 0; rowIndex < products.size() && rowIndex + 1 < sheet.getLastRowNum() + 1; rowIndex++) {
@@ -587,6 +600,47 @@ public class ProductImportService {
                             System.out.println("🔹 Odczytano skonto dla '" + product.getName() + "': " + intValue);
                         }
                     }
+                }
+                
+                // Odczytaj metodę obliczania rabatu
+                DiscountCalculationMethod method = null;
+                if (discountCalculationMethodIndex >= 0) {
+                    Cell cell = dataRow.getCell(discountCalculationMethodIndex);
+                    if (cell != null && cell.getCellType() != CellType.BLANK) {
+                        String methodValue = "";
+                        if (cell.getCellType() == CellType.STRING) {
+                            methodValue = cell.getStringCellValue().trim();
+                        } else if (cell.getCellType() == CellType.NUMERIC) {
+                            methodValue = String.valueOf((int) cell.getNumericCellValue());
+                        }
+                        
+                        if (!methodValue.isEmpty()) {
+                            try {
+                                method = DiscountCalculationMethod.valueOf(methodValue.toUpperCase());
+                                product.setDiscountCalculationMethod(method);
+                                System.out.println("🔹 Odczytano metodę obliczania dla '" + product.getName() + "': " + method);
+                            } catch (IllegalArgumentException e) {
+                                System.out.println("⚠️ Nieprawidłowa metoda obliczania dla '" + product.getName() + "': " + methodValue);
+                            }
+                        }
+                    }
+                }
+                
+                // Oblicz końcowy rabat na podstawie metody i 4 rabatów
+                if (method != null) {
+                    double finalDiscount = discountCalculationService.calculateDiscount(
+                        method,
+                        product.getBasicDiscount(),
+                        product.getAdditionalDiscount(),
+                        product.getPromotionDiscount(),
+                        product.getSkontoDiscount()
+                    );
+                    product.setDiscount(finalDiscount);
+                    System.out.println("🔹 Obliczono końcowy rabat dla '" + product.getName() + "': " + finalDiscount + "% (metoda: " + method + ")");
+                } else {
+                    // Jeśli brak metody, ustaw discount na 0 (lub można rzucić wyjątek)
+                    System.out.println("⚠️ Brak metody obliczania dla '" + product.getName() + "' - ustawiono rabat na 0");
+                    product.setDiscount(0.0);
                 }
             }
         }

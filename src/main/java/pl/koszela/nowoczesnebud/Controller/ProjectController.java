@@ -13,7 +13,6 @@ import pl.koszela.nowoczesnebud.Model.*;
 import pl.koszela.nowoczesnebud.Repository.InputRepository;
 import pl.koszela.nowoczesnebud.Repository.ProductRepository;
 import pl.koszela.nowoczesnebud.Service.PriceCalculationService;
-import pl.koszela.nowoczesnebud.Service.PriceListSnapshotService;
 import pl.koszela.nowoczesnebud.Service.ProjectService;
 
 import java.io.IOException;
@@ -40,7 +39,6 @@ public class ProjectController {
     
     private final ProjectService projectService;
     private final CreateOffer createOffer;
-    private final PriceListSnapshotService priceListSnapshotService;
     private final PriceCalculationService priceCalculationService;
     private final ProductRepository productRepository;
     private final InputRepository inputRepository;
@@ -48,14 +46,12 @@ public class ProjectController {
 
     public ProjectController(ProjectService projectService, 
                             CreateOffer createOffer,
-                            PriceListSnapshotService priceListSnapshotService,
                             PriceCalculationService priceCalculationService,
                             ProductRepository productRepository,
                             InputRepository inputRepository,
                             pl.koszela.nowoczesnebud.Service.OfferPdfService offerPdfService) {
         this.projectService = projectService;
         this.createOffer = createOffer;
-        this.priceListSnapshotService = priceListSnapshotService;
         this.priceCalculationService = priceCalculationService;
         this.productRepository = productRepository;
         this.inputRepository = inputRepository;
@@ -68,6 +64,15 @@ public class ProjectController {
     @GetMapping
     public List<Project> getAllProjects() {
         return projectService.getAllProjects();
+    }
+
+    /**
+     * Pobiera wszystkich klientów (User)
+     * ⚠️ WAŻNE: Ten endpoint musi być PRZED /client/{clientId}, aby Spring nie dopasował "clients" jako clientId
+     */
+    @GetMapping("/clients")
+    public List<User> getAllClients() {
+        return projectService.getAllClients();
     }
 
     /**
@@ -84,6 +89,206 @@ public class ProjectController {
     @GetMapping("/{id}")
     public Project getProjectById(@PathVariable Long id) {
         return projectService.getProjectById(id);
+    }
+    
+    /**
+     * Zapisuje dane produktów i grup dla projektu
+     * POST /api/projects/{id}/save-data
+     */
+    @PostMapping("/{projectId}/save-data")
+    public ResponseEntity<String> saveProjectData(
+            @PathVariable Long projectId,
+            @RequestBody pl.koszela.nowoczesnebud.DTO.SaveProjectDataRequest request) {
+        logger.info("📥 Request: POST /api/projects/{}/save-data", projectId);
+        
+        try {
+            projectService.saveProjectData(projectId, request);
+            return ResponseEntity.ok("Project data saved successfully");
+        } catch (Exception e) {
+            logger.error("❌ Błąd podczas zapisu danych projektu: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Error saving project data: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Pobiera zapisane dane produktów dla projektu
+     * GET /api/projects/{id}/products?category=TILE
+     */
+    @GetMapping("/{projectId}/products")
+    public ResponseEntity<List<pl.koszela.nowoczesnebud.DTO.ProjectProductDTO>> getProjectProducts(
+            @PathVariable Long projectId,
+            @RequestParam ProductCategory category) {
+        logger.info("📥 Request: GET /api/projects/{}/products?category={}", projectId, category);
+        
+        try {
+            List<pl.koszela.nowoczesnebud.DTO.ProjectProductDTO> products = 
+                projectService.getProjectProducts(projectId, category);
+            return ResponseEntity.ok(products);
+        } catch (Exception e) {
+            logger.error("❌ Błąd podczas pobierania produktów projektu: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+    
+    /**
+     * Pobiera zapisane opcje grup produktowych dla projektu
+     * GET /api/projects/{id}/product-groups?category=TILE
+     */
+    @GetMapping("/{projectId}/product-groups")
+    public ResponseEntity<List<pl.koszela.nowoczesnebud.DTO.ProjectProductGroupDTO>> getProjectProductGroups(
+            @PathVariable Long projectId,
+            @RequestParam ProductCategory category) {
+        logger.info("📥 Request: GET /api/projects/{}/product-groups?category={}", projectId, category);
+        
+        try {
+            List<pl.koszela.nowoczesnebud.DTO.ProjectProductGroupDTO> groups = 
+                projectService.getProjectProductGroups(projectId, category);
+            return ResponseEntity.ok(groups);
+        } catch (Exception e) {
+            logger.error("❌ Błąd podczas pobierania grup produktowych projektu: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+    
+    /**
+     * Porównuje aktualne ceny z cennika z zapisanymi cenami w projekcie
+     * GET /api/projects/{id}/products-comparison?category=TILE
+     * Zwraca ProductComparisonDTO (Stara vs Nowa cena) dla UI
+     */
+    @GetMapping("/{projectId}/products-comparison")
+    public ResponseEntity<List<pl.koszela.nowoczesnebud.DTO.ProductComparisonDTO>> getProductComparison(
+            @PathVariable Long projectId,
+            @RequestParam ProductCategory category) {
+        logger.info("📥 Request: GET /api/projects/{}/products-comparison?category={}", projectId, category);
+        
+        try {
+            List<pl.koszela.nowoczesnebud.DTO.ProductComparisonDTO> comparison = 
+                projectService.getProductComparison(projectId, category);
+            return ResponseEntity.ok(comparison);
+        } catch (Exception e) {
+            logger.error("❌ Błąd podczas porównania cen produktów: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+    
+    // ==================== DRAFT CHANGES ENDPOINTS ====================
+    
+    /**
+     * Zapisuje tymczasowe zmiany (draft changes) dla projektu
+     * POST /api/projects/{id}/draft-changes
+     * Używane po każdej zmianie marży/rabatu/ceny ręcznej na frontendzie
+     */
+    @PostMapping("/{projectId}/draft-changes")
+    public ResponseEntity<Void> saveDraftChanges(
+            @PathVariable Long projectId,
+            @RequestBody pl.koszela.nowoczesnebud.DTO.SaveDraftChangesRequest request) {
+        logger.info("📥 Request: POST /api/projects/{}/draft-changes (kategoria: {})", projectId, request.getCategory());
+        
+        try {
+            projectService.saveDraftChanges(projectId, request);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            logger.error("❌ Błąd podczas zapisu draft changes: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    /**
+     * Pobiera draft changes dla projektu (opcjonalnie filtrowane po kategorii)
+     * GET /api/projects/{id}/draft-changes?category=TILE
+     */
+    @GetMapping("/{projectId}/draft-changes")
+    public ResponseEntity<List<pl.koszela.nowoczesnebud.DTO.DraftChangeDTO>> getDraftChanges(
+            @PathVariable Long projectId,
+            @RequestParam(required = false) String category) {
+        logger.info("📥 Request: GET /api/projects/{}/draft-changes?category={}", projectId, category);
+        
+        try {
+            List<pl.koszela.nowoczesnebud.DTO.DraftChangeDTO> draftChanges = 
+                projectService.getDraftChanges(projectId, category);
+            return ResponseEntity.ok(draftChanges);
+        } catch (Exception e) {
+            logger.error("❌ Błąd podczas pobierania draft changes: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+    
+    /**
+     * Usuwa wszystkie draft changes dla projektu
+     * DELETE /api/projects/{id}/draft-changes
+     * Używane do "Cofnij zmiany" lub po zapisaniu projektu
+     */
+    @DeleteMapping("/{projectId}/draft-changes")
+    public ResponseEntity<Void> clearDraftChanges(@PathVariable Long projectId) {
+        logger.info("📥 Request: DELETE /api/projects/{}/draft-changes", projectId);
+        
+        try {
+            projectService.clearDraftChanges(projectId);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            logger.error("❌ Błąd podczas usuwania draft changes: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    // ==================== DRAFT INPUTS ====================
+    
+    /**
+     * Zapisuje draft inputs (tymczasowe Input z formularza)
+     * POST /api/projects/{id}/draft-inputs
+     * Używane po każdej zmianie w formularzu "Wprowadź dane"
+     */
+    @PostMapping("/{projectId}/draft-inputs")
+    public ResponseEntity<Void> saveDraftInputs(
+            @PathVariable Long projectId,
+            @RequestBody pl.koszela.nowoczesnebud.DTO.SaveDraftInputsRequest request) {
+        logger.info("📥 Request: POST /api/projects/{}/draft-inputs", projectId);
+        
+        try {
+            projectService.saveDraftInputs(projectId, request);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            logger.error("❌ Błąd podczas zapisu draft inputs: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    /**
+     * Pobiera draft inputs dla projektu
+     * GET /api/projects/{id}/draft-inputs
+     */
+    @GetMapping("/{projectId}/draft-inputs")
+    public ResponseEntity<List<pl.koszela.nowoczesnebud.DTO.DraftInputDTO>> getDraftInputs(
+            @PathVariable Long projectId) {
+        logger.info("📥 Request: GET /api/projects/{}/draft-inputs", projectId);
+        
+        try {
+            List<pl.koszela.nowoczesnebud.DTO.DraftInputDTO> draftInputs = 
+                projectService.getDraftInputs(projectId);
+            return ResponseEntity.ok(draftInputs);
+        } catch (Exception e) {
+            logger.error("❌ Błąd podczas pobierania draft inputs: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+    
+    /**
+     * Usuwa wszystkie draft inputs dla projektu
+     * DELETE /api/projects/{id}/draft-inputs
+     * Używane do "Cofnij zmiany" lub po zapisaniu projektu
+     */
+    @DeleteMapping("/{projectId}/draft-inputs")
+    public ResponseEntity<Void> clearDraftInputs(@PathVariable Long projectId) {
+        logger.info("📥 Request: DELETE /api/projects/{}/draft-inputs", projectId);
+        
+        try {
+            projectService.clearDraftInputs(projectId);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            logger.error("❌ Błąd podczas usuwania draft inputs: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     /**
@@ -104,11 +309,13 @@ public class ProjectController {
     }
 
     /**
+     * TODO: Przepisać na nowy model - używa ProjectProduct zamiast Input z productId
      * Zapisuje override'y ceny i ilości dla produktów w projekcie
      * POST /api/projects/{projectId}/price-override
      * Przyjmuje listę override'ów: [{ productId, manualSellingPrice?, manualQuantity? }]
      */
-    @PostMapping("/{projectId}/price-override")
+    // @PostMapping("/{projectId}/price-override")
+    /* ZAKOMENTOWANE - używa starych pół Input (productId, manualSellingPrice, manualQuantity)
     public ResponseEntity<List<Input>> savePriceOverrides(
             @PathVariable Long projectId,
             @RequestBody List<PriceOverrideRequest> overrideRequests) {
@@ -206,14 +413,16 @@ public class ProjectController {
             logger.error("Błąd podczas zapisywania override'ów dla projektu {}: {}", projectId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
-    }
+    } */
     
     /**
+     * TODO: Przepisać na nowy model - używa ProjectProductGroup zamiast Input z groupManufacturer/groupName
      * Zapisuje opcję (Główna/Opcjonalna) dla grupy produktów w projekcie
      * POST /api/projects/{projectId}/group-option
      * Przyjmuje: { category, manufacturer, groupName, isMainOption }
      */
-    @PostMapping("/{projectId}/group-option")
+    // @PostMapping("/{projectId}/group-option")
+    /* ZAKOMENTOWANE - używa starych pól Input (groupManufacturer, groupName, isMainOption)
     public ResponseEntity<Input> saveGroupOption(
             @PathVariable Long projectId,
             @RequestBody GroupOptionRequest request) {
@@ -283,13 +492,15 @@ public class ProjectController {
             logger.error("Błąd podczas zapisywania opcji grupy dla projektu {}: {}", projectId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
-    }
+    } */
     
     /**
+     * TODO: Przepisać na nowy model - używa ProjectProduct zamiast Input z productId
      * Usuwa wszystkie override'y ceny i ilości dla produktów w projekcie
      * DELETE /api/projects/{projectId}/price-override
      */
-    @DeleteMapping("/{projectId}/price-override")
+    // @DeleteMapping("/{projectId}/price-override")
+    /* ZAKOMENTOWANE - używa starych pół Input (productId)
     public ResponseEntity<Void> deleteAllPriceOverrides(@PathVariable Long projectId) {
         try {
             Project project = projectService.getProjectById(projectId);
@@ -315,7 +526,7 @@ public class ProjectController {
             logger.error("Błąd podczas usuwania override'ów dla projektu {}: {}", projectId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
-    }
+    } */
     
     /**
      * DTO dla requestu override'u ceny/ilości
@@ -411,10 +622,12 @@ public class ProjectController {
     }
 
     /**
+     * TODO: Przepisać na nowy model - używa ProductProduct zamiast PriceListSnapshot
      * Pobiera produkty ze snapshotu projektu dla danej kategorii
      * Zwraca produkty ze snapshotu + dane z Input (quantity, sellingPrice, isManualPrice)
      */
-    @GetMapping("/{projectId}/snapshot-products")
+    // @GetMapping("/{projectId}/snapshot-products")
+    /* ZAKOMENTOWANE - używa starego modelu PriceListSnapshot
     public ResponseEntity<List<Product>> getSnapshotProducts(
             @PathVariable Long projectId,
             @RequestParam ProductCategory category) {
@@ -501,10 +714,8 @@ public class ProjectController {
                     product.setRetailPrice(item.getRetailPrice());
                     product.setPurchasePrice(item.getPurchasePrice());
                     product.setSellingPrice(item.getSellingPrice());
-                    product.setBasicDiscount(item.getBasicDiscount() != null ? item.getBasicDiscount() : 0);
-                    product.setPromotionDiscount(item.getPromotionDiscount() != null ? item.getPromotionDiscount() : 0);
-                    product.setAdditionalDiscount(item.getAdditionalDiscount() != null ? item.getAdditionalDiscount() : 0);
-                    product.setSkontoDiscount(item.getSkontoDiscount() != null ? item.getSkontoDiscount() : 0);
+                    // Użyj nowego pola discount (jeśli snapshot ma stare pola, użyj 0.0)
+                    product.setDiscount(item.getDiscount() != null ? item.getDiscount() : 0.0);
                     product.setMarginPercent(item.getMarginPercent() != null ? item.getMarginPercent() : 0.0);
                     product.setUnit(item.getUnit());
                     product.setQuantityConverter(item.getQuantityConverter() != null ? item.getQuantityConverter() : 1.0);
@@ -623,14 +834,16 @@ public class ProjectController {
             logger.error("Błąd pobierania produktów ze snapshotu: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
-    }
+    } */
 
     /**
+     * TODO: Przepisać na nowy model - używa ProjectProduct zamiast PriceListSnapshot
      * Wypełnij ilości produktów na podstawie inputów - używa snapshotu projektu
      * POST /api/projects/{projectId}/fill-quantities?category=TILE
      * ⚠️ WAŻNE: Używa produktów ze snapshotu projektu, nie z aktualnego cennika!
      */
-    @PostMapping("/{projectId}/fill-quantities")
+    // @PostMapping("/{projectId}/fill-quantities")
+    /* ZAKOMENTOWANE - używa starego modelu PriceListSnapshot
     public ResponseEntity<List<Product>> fillQuantitiesFromSnapshot(
             @PathVariable Long projectId,
             @RequestBody List<Input> inputList,
@@ -820,7 +1033,7 @@ public class ProjectController {
             logger.error("Błąd wypełniania ilości ze snapshotu: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
-    }
+    } */
 
     /**
      * Generuje PDF oferty na podstawie projektu

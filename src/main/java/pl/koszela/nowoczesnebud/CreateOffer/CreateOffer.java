@@ -7,7 +7,6 @@ import com.itextpdf.text.pdf.PdfPTable;
 import com.itextpdf.text.pdf.PdfWriter;
 import org.springframework.stereotype.Service;
 import pl.koszela.nowoczesnebud.Model.*;
-import pl.koszela.nowoczesnebud.Service.PriceListSnapshotService;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -33,10 +32,7 @@ import java.util.stream.Collectors;
 @Service
 public class CreateOffer {
     
-    private final PriceListSnapshotService priceListSnapshotService;
-    
-    public CreateOffer(PriceListSnapshotService priceListSnapshotService) {
-        this.priceListSnapshotService = priceListSnapshotService;
+    public CreateOffer() {
     }
     
     // Kolory firmowe
@@ -393,71 +389,8 @@ public class CreateOffer {
     private List<Product> getProductsFromSnapshots(Project project) {
         List<Product> allProducts = new ArrayList<>();
         
-        if (project.getSnapshotDate() == null) {
-            return allProducts;
-        }
-        
-        // Pobierz Input z formularza (mapperName -> quantity)
-        Map<String, Double> inputMap = new HashMap<>();
-        if (project.getInputs() != null) {
-            inputMap = project.getInputs().stream()
-                .filter(input -> input.getMapperName() != null && input.getQuantity() != null)
-                .collect(Collectors.toMap(
-                    input -> input.getMapperName().toLowerCase().trim(),
-                    Input::getQuantity,
-                    (existing, replacement) -> existing
-                ));
-        }
-        
-        // Pobierz produkty ze snapshotów dla wszystkich kategorii
-        for (ProductCategory category : ProductCategory.values()) {
-            Optional<PriceListSnapshot> snapshotOpt = priceListSnapshotService.findSnapshotForDate(
-                project.getSnapshotDate(), category);
-            
-            if (snapshotOpt.isPresent()) {
-                List<PriceListSnapshotItem> snapshotItems = priceListSnapshotService.getSnapshotItems(
-                    snapshotOpt.get().getId());
-                
-                for (PriceListSnapshotItem item : snapshotItems) {
-                    Product product = new Product();
-                    product.setId(item.getProductId());
-                    product.setName(item.getName());
-                    product.setManufacturer(item.getManufacturer());
-                    product.setGroupName(item.getGroupName());
-                    product.setCategory(item.getCategory());
-                    product.setMapperName(item.getMapperName());
-                    product.setRetailPrice(item.getRetailPrice());
-                    product.setPurchasePrice(item.getPurchasePrice());
-                    product.setSellingPrice(item.getSellingPrice());
-                    product.setBasicDiscount(item.getBasicDiscount() != null ? item.getBasicDiscount() : 0);
-                    product.setPromotionDiscount(item.getPromotionDiscount() != null ? item.getPromotionDiscount() : 0);
-                    product.setAdditionalDiscount(item.getAdditionalDiscount() != null ? item.getAdditionalDiscount() : 0);
-                    product.setSkontoDiscount(item.getSkontoDiscount() != null ? item.getSkontoDiscount() : 0);
-                    product.setMarginPercent(item.getMarginPercent() != null ? item.getMarginPercent() : 0.0);
-                    product.setUnit(item.getUnit());
-                    product.setQuantityConverter(item.getQuantityConverter() != null ? item.getQuantityConverter() : 1.0);
-                    product.setIsMainOption(item.getIsMainOption());
-                    
-                    // Dopasuj quantity z Input z formularza
-                    if (item.getMapperName() != null) {
-                        String mapperKey = item.getMapperName().toLowerCase().trim();
-                        Double inputQuantity = inputMap.get(mapperKey);
-                        if (inputQuantity != null && inputQuantity > 0) {
-                            // Oblicz quantity produktu: inputQuantity * quantityConverter
-                            double quantityConverter = product.getQuantityConverter() != null ? product.getQuantityConverter() : 1.0;
-                            product.setQuantity(inputQuantity * quantityConverter);
-                        } else {
-                            product.setQuantity(0.0);
-                        }
-                    } else {
-                        product.setQuantity(0.0);
-                    }
-                    
-                    allProducts.add(product);
-                }
-            }
-        }
-        
+        // TODO: Przepisać na ProjectProduct - używaj ProjectProduct zamiast PriceListSnapshot
+        // Tymczasowo - nie generujemy z snapshotów (stara logika została zakomentowana)
         return allProducts;
     }
 

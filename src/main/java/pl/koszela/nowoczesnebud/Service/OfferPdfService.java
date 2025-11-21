@@ -11,8 +11,6 @@ import org.thymeleaf.context.Context;
 import org.xhtmlrenderer.pdf.ITextRenderer;
 import pl.koszela.nowoczesnebud.Model.Input;
 import pl.koszela.nowoczesnebud.Model.OfferTemplate;
-import pl.koszela.nowoczesnebud.Model.PriceListSnapshot;
-import pl.koszela.nowoczesnebud.Model.PriceListSnapshotItem;
 import pl.koszela.nowoczesnebud.Model.Product;
 import pl.koszela.nowoczesnebud.Model.ProductCategory;
 import pl.koszela.nowoczesnebud.Model.Project;
@@ -36,14 +34,11 @@ public class OfferPdfService {
     
     private final OfferTemplateRepository templateRepository;
     private final SpringTemplateEngine templateEngine;
-    private final PriceListSnapshotService priceListSnapshotService;
 
     public OfferPdfService(OfferTemplateRepository templateRepository,
-                          @Qualifier("stringTemplateEngine") SpringTemplateEngine templateEngine,
-                          PriceListSnapshotService priceListSnapshotService) {
+                          @Qualifier("stringTemplateEngine") SpringTemplateEngine templateEngine) {
         this.templateRepository = templateRepository;
         this.templateEngine = templateEngine;
-        this.priceListSnapshotService = priceListSnapshotService;
     }
 
     /**
@@ -84,8 +79,9 @@ public class OfferPdfService {
         context.setVariable("project", project);
         context.setVariable("client", project.getClient());
         
+        // TODO: Przepisać aby używać ProjectProduct zamiast snapshotów
         // Pobierz produkty ze snapshotów (podobnie jak w CreateOffer.java)
-        List<Product> allProducts = getProductsFromSnapshots(project);
+        List<Product> allProducts = new ArrayList<>(); // TODO: getProductsFromProjectProducts(project);
         
         // Filtruj tylko produkty z quantity > 0
         allProducts = allProducts.stream()
@@ -240,8 +236,10 @@ public class OfferPdfService {
     }
 
     /**
+     * TODO: Przepisać na nowy model - używa ProjectProduct zamiast PriceListSnapshot
      * Pobiera produkty ze snapshotów projektu (kopiowane z CreateOffer.java)
      */
+    /* ZAKOMENTOWANE - używa PriceListSnapshot
     private List<Product> getProductsFromSnapshots(Project project) {
         List<Product> allProducts = new ArrayList<>();
         
@@ -310,7 +308,7 @@ public class OfferPdfService {
         }
         
         return allProducts;
-    }
+    } */
 
     /**
      * Oblicza sumę wartości produktów

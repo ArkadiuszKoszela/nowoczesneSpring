@@ -129,27 +129,29 @@ public class ProductExportService {
             String[] headers;
             
             if (category == ProductCategory.ACCESSORY) {
-                // AKCESORIA: name, unitDetalPrice, unit, basicDiscount, additionalDiscount, promotionDiscount, skonto, type
+                // AKCESORIA: name, unitDetalPrice, unit, basicDiscount, additionalDiscount, promotionDiscount, skonto, discountCalculationMethod, type
                 headers = new String[]{
-                    "Nazwa",                   // name
-                    "Cena katalogowa",         // unitDetalPrice
-                    "Jednostka",               // unit
-                    "Rabat podstawowy",        // basicDiscount
-                    "Rabat dodatkowy",         // additionalDiscount
-                    "Rabat promocyjny",        // promotionDiscount
-                    "Skonto",                  // skonto
-                    "Typ"                      // type
+                    "Nazwa",                           // name
+                    "Cena katalogowa",                 // unitDetalPrice
+                    "Jednostka",                       // unit
+                    "Rabat podstawowy",                // basicDiscount
+                    "Rabat dodatkowy",                 // additionalDiscount
+                    "Rabat promocyjny",                // promotionDiscount
+                    "Skonto",                          // skonto
+                    "Sposób obliczania rabatu",        // discountCalculationMethod
+                    "Typ"                              // type
                 };
             } else {
-                // DACHÓWKI I RYNNY: name, unitDetalP, quantityCo, basicDisc, additional, promotion, skonto
+                // DACHÓWKI I RYNNY: name, unitDetalP, quantityCo, basicDisc, additional, promotion, skonto, discountCalculationMethod
                 headers = new String[]{
-                    "Nazwa",                   // name
-                    "Cena katalogowa",         // unitDetalP
-                    "Przelicznik",             // quantityCo
-                    "Rabat podstawowy",        // basicDisc
-                    "Rabat dodatkowy",         // additional
-                    "Rabat promocyjny",        // promotion
-                    "Skonto"                   // skonto
+                    "Nazwa",                           // name
+                    "Cena katalogowa",                 // unitDetalP
+                    "Przelicznik",                     // quantityCo
+                    "Rabat podstawowy",                // basicDisc
+                    "Rabat dodatkowy",                 // additional
+                    "Rabat promocyjny",                // promotion
+                    "Skonto",                          // skonto
+                    "Sposób obliczania rabatu"         // discountCalculationMethod
                 };
             }
             
@@ -189,7 +191,13 @@ public class ProductExportService {
                 // skonto (kolumna 6)
                 createNumericCell(row, colIndex++, product.getSkontoDiscount() != null ? product.getSkontoDiscount().doubleValue() : 0.0, numberStyle);
                 
-                // Typ (kolumna 7) - tylko dla akcesoriów
+                // Sposób obliczania rabatu (kolumna 7)
+                String methodValue = product.getDiscountCalculationMethod() != null 
+                    ? product.getDiscountCalculationMethod().name() 
+                    : "";
+                createCell(row, colIndex++, methodValue, cellStyle);
+                
+                // Typ (kolumna 8) - tylko dla akcesoriów
                 if (category == ProductCategory.ACCESSORY) {
                     createCell(row, colIndex++, product.getAccessoryType(), cellStyle);
                 }

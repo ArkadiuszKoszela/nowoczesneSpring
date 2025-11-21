@@ -1,5 +1,6 @@
 package pl.koszela.nowoczesnebud.DTO;
 
+import pl.koszela.nowoczesnebud.Model.DiscountCalculationMethod;
 import pl.koszela.nowoczesnebud.Model.ProductCategory;
 
 import javax.validation.constraints.Max;
@@ -38,6 +39,10 @@ public class BulkDiscountRequest {
     
     // Typ produktu (opcjonalny - jeśli null, rabaty są stosowane do wszystkich produktów)
     private String productType;
+    
+    // Metoda obliczania rabatu (wymagana)
+    @NotNull(message = "Metoda obliczania rabatu jest wymagana")
+    private DiscountCalculationMethod discountCalculationMethod;
 
     // Getters & Setters
     public ProductCategory getCategory() {
@@ -102,6 +107,14 @@ public class BulkDiscountRequest {
 
     public void setProductType(String productType) {
         this.productType = productType;
+    }
+
+    public DiscountCalculationMethod getDiscountCalculationMethod() {
+        return discountCalculationMethod;
+    }
+
+    public void setDiscountCalculationMethod(DiscountCalculationMethod discountCalculationMethod) {
+        this.discountCalculationMethod = discountCalculationMethod;
     }
 }
 
