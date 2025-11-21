@@ -29,7 +29,7 @@ public class OfferTemplate {
 
     /**
      * Szablon HTML z placeholderami Thymeleaf
-     * Przykład: <h1 th:text="${project.projectName}">Nazwa projektu</h1>
+     * Przykład: <h1 th:text="${project.client.name}">Nazwa klienta</h1>
      */
     @Lob
     @Column

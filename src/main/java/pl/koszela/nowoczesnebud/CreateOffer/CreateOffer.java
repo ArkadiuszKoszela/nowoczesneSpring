@@ -274,8 +274,12 @@ public class CreateOffer {
         infoTable.setSpacingAfter(15);
         infoTable.setWidths(new float[]{1f, 1f});
         
-        if (project.getProjectName() != null && !project.getProjectName().isEmpty()) {
-            PdfPCell projectCell = new PdfPCell(new Phrase("Projekt: " + project.getProjectName(), createFont(10, false, TEXT_DARK)));
+        // Nazwa projektu została usunięta - używamy danych klienta
+        if (project.getClient() != null) {
+            String clientInfo = project.getClient().getName() != null && project.getClient().getSurname() != null
+                ? "Klient: " + project.getClient().getName() + " " + project.getClient().getSurname()
+                : "Klient: " + (project.getClient().getName() != null ? project.getClient().getName() : "");
+            PdfPCell projectCell = new PdfPCell(new Phrase(clientInfo, createFont(10, false, TEXT_DARK)));
             projectCell.setPadding(8);
             projectCell.setBackgroundColor(ACCENT_COLOR);
             projectCell.setBorder(Rectangle.BOX);

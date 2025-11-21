@@ -16,8 +16,6 @@ import pl.koszela.nowoczesnebud.Repository.UserRepository;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import javax.transaction.Transactional;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -78,7 +76,7 @@ public class ProjectService {
      */
     @Transactional
     public Project save(Project project, List<Input> formInputsToSave) {
-        logger.info("💾 Zapisywanie projektu: {}", project.getProjectName());
+        logger.info("💾 Zapisywanie projektu ID: {}", project.getId() != null ? project.getId() : "nowy");
         
         // Jeśli projekt ma ID - aktualizuj istniejący
         if (project.getId() != null) {
@@ -87,7 +85,6 @@ public class ProjectService {
                 .orElseThrow(() -> new RuntimeException("Project not found: " + project.getId()));
             
             // Aktualizuj dane projektu
-            existingProject.setProjectName(project.getProjectName());
             existingProject.setStatus(project.getStatus());
             existingProject.setClient(project.getClient());
             
@@ -159,9 +156,18 @@ public class ProjectService {
             project.setClient(client);
         }
         
-        // Jeśli brak nazwy projektu - wygeneruj automatycznie
-        if (project.getProjectName() == null || project.getProjectName().trim().isEmpty()) {
-            project.setProjectName(generateDefaultProjectName(client));
+        // ⚠️ WAŻNE: OneToOne - sprawdź czy klient już ma projekt
+        // Jeśli tak, zaktualizuj istniejący zamiast tworzyć nowy
+        if (client != null && client.getId() != 0) {
+            Optional<Project> existingProjectForClient = projectRepository.findByClientId(client.getId());
+            if (existingProjectForClient.isPresent()) {
+                logger.info("  Klient już ma projekt (ID: {}), aktualizuję istniejący zamiast tworzyć nowy", 
+                           existingProjectForClient.get().getId());
+                // Ustaw ID istniejącego projektu, aby zaktualizować zamiast tworzyć nowy
+                project.setId(existingProjectForClient.get().getId());
+                // Przejdź do logiki aktualizacji (powyżej)
+                return save(project, formInputsToSave);
+            }
         }
         
         // Ustaw status domyślny jeśli nie ma
@@ -214,9 +220,9 @@ public class ProjectService {
     }
 
     /**
-     * Pobiera wszystkie projekty dla danego klienta
+     * Pobiera projekt dla danego klienta (OneToOne - jeden klient ma jeden projekt)
      */
-    public List<Project> getProjectsByClientId(Long clientId) {
+    public Optional<Project> getProjectByClientId(Long clientId) {
         return projectRepository.findByClientId(clientId);
     }
 
@@ -307,15 +313,16 @@ public class ProjectService {
         
         User user = userOpt.get();
         
-        // Znajdź wszystkie projekty klienta
-        List<Project> userProjects = projectRepository.findByClientId(userId);
-        logger.info("  Znaleziono {} projektów dla klienta", userProjects.size());
+        // Znajdź projekt klienta (OneToOne - jeden klient ma jeden projekt)
+        Optional<Project> userProjectOpt = projectRepository.findByClientId(userId);
         
-        // Usuń wszystkie projekty klienta (to automatycznie usunie też Input przez cascade)
-        if (!userProjects.isEmpty()) {
-            logger.info("  Usuwanie {} projektów klienta...", userProjects.size());
-            projectRepository.deleteAll(userProjects);
-            logger.info("  ✓ Projekty usunięte");
+        // Usuń projekt klienta jeśli istnieje (to automatycznie usunie też Input przez cascade)
+        if (userProjectOpt.isPresent()) {
+            logger.info("  Znaleziono projekt dla klienta, usuwanie...");
+            projectRepository.delete(userProjectOpt.get());
+            logger.info("  ✓ Projekt usunięty");
+        } else {
+            logger.info("  Klient nie ma projektu");
         }
         
         // Usuń klienta
@@ -703,17 +710,6 @@ public class ProjectService {
         return Math.abs(price1 - price2) < 0.01;
     }
 
-    /**
-     * Generuje domyślną nazwę projektu
-     */
-    private String generateDefaultProjectName(User client) {
-        String date = LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"));
-        if (client != null && client.getName() != null) {
-            return "Projekt - " + client.getName() + " - " + date;
-        }
-        return "Projekt - " + date;
-    }
-    
     // ==================== DRAFT CHANGES ====================
     
     /**

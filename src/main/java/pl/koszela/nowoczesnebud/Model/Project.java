@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * Model Project - zastępuje Offer
- * Relacja: Jeden Client (User) → Wiele Projektów
+ * Relacja: Jeden Client (User) → Jeden Projekt (OneToOne)
  */
 @Data
 @ToString(exclude = {"inputs", "projectProducts", "projectProductGroups"}) // ⚠️ Wyklucz cykliczne referencje z toString()
@@ -27,18 +27,12 @@ public class Project {
     private Long id;
     
     /**
-     * RELACJA: Wiele projektów → Jeden klient
-     * Zmiana z @OneToOne na @ManyToOne
+     * RELACJA: Jeden projekt → Jeden klient (OneToOne)
      * EAGER żeby uniknąć problemów z serializacją lazy proxy
      */
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "client_id", nullable = false)
+    @OneToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "client_id", nullable = false, unique = true)
     private User client;
-    
-    /**
-     * Nazwa projektu (np. "Projekt dachu - 15.11.2024")
-     */
-    private String projectName;
     
     /**
      * Status projektu

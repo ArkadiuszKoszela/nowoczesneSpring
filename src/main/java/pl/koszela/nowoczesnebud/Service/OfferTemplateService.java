@@ -188,7 +188,7 @@ public class OfferTemplateService {
             "<h1 style=\"color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 10px;\">Oferta handlowa</h1>" +
             "<div style=\"margin-top: 30px;\">" +
             "<h2>Dane projektu</h2>" +
-            "<p><strong>Nazwa projektu:</strong> [[${project.projectName}]]</p>" +
+            "<p><strong>Klient:</strong> [[${project.client.name}]] [[${project.client.surname}]]</p>" +
             "<p><strong>Data:</strong> [[${formattedDate}]]</p>" +
             "</div>" +
             "<div style=\"margin-top: 30px;\">" +

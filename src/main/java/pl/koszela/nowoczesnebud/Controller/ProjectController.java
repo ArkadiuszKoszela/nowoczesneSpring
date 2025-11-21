@@ -76,11 +76,13 @@ public class ProjectController {
     }
 
     /**
-     * Pobiera wszystkie projekty dla danego klienta
+     * Pobiera projekt dla danego klienta (OneToOne - jeden klient ma jeden projekt)
      */
     @GetMapping("/client/{clientId}")
-    public List<Project> getProjectsByClient(@PathVariable Long clientId) {
-        return projectService.getProjectsByClientId(clientId);
+    public ResponseEntity<Project> getProjectByClient(@PathVariable Long clientId) {
+        return projectService.getProjectByClientId(clientId)
+            .map(project -> ResponseEntity.ok(project))
+            .orElse(ResponseEntity.notFound().build());
     }
 
     /**
@@ -1046,8 +1048,8 @@ public class ProjectController {
             @RequestParam(required = false) Long templateId) {
         try {
             Project project = projectService.getProjectById(id);
-            logger.info("Generowanie PDF dla projektu: {} - {} (szablon ID: {})", 
-                project.getId(), project.getProjectName(), templateId);
+            logger.info("Generowanie PDF dla projektu ID: {} (szablon ID: {})", 
+                project.getId(), templateId);
             
             byte[] pdfBytes;
             

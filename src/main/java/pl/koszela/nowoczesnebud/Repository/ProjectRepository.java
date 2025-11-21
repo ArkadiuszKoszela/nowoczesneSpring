@@ -20,17 +20,11 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     List<Project> findAllWithClient();
     
     /**
-     * Znajdź wszystkie projekty dla danego klienta
+     * Znajdź projekt dla danego klienta (OneToOne - jeden klient ma jeden projekt)
      * JOIN FETCH zapewnia że client jest załadowany (unika lazy proxy)
      */
-    @Query("SELECT DISTINCT p FROM Project p JOIN FETCH p.client WHERE p.client.id = :clientId ORDER BY p.createdAt DESC")
-    List<Project> findByClientId(@Param("clientId") Long clientId);
-    
-    /**
-     * Znajdź projekt po ID klienta i nazwie projektu
-     */
-    @Query("SELECT DISTINCT p FROM Project p JOIN FETCH p.client WHERE p.client.id = :clientId AND p.projectName = :projectName")
-    List<Project> findByClientIdAndProjectName(@Param("clientId") Long clientId, @Param("projectName") String projectName);
+    @Query("SELECT DISTINCT p FROM Project p JOIN FETCH p.client WHERE p.client.id = :clientId")
+    Optional<Project> findByClientId(@Param("clientId") Long clientId);
     
     /**
      * Znajdź projekt po ID z załadowanym klientem

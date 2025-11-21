@@ -1,5 +1,6 @@
 package pl.koszela.nowoczesnebud.Model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
@@ -39,4 +40,14 @@ public class User {
 
     @UpdateTimestamp
     private LocalDateTime updateDateTime;
+    
+    /**
+     * RELACJA: Jeden klient → Jeden projekt (OneToOne)
+     * mappedBy wskazuje, że Project jest właścicielem relacji
+     * ⚠️ WAŻNE: @JsonIgnore zapobiega cyklicznej referencji podczas deserializacji JSON
+     * (gdy frontend wysyła Project z client, nie powinien zawierać project w client)
+     */
+    @OneToOne(mappedBy = "client", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonIgnore
+    private Project project;
 }
