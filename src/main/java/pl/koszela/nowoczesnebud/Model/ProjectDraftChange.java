@@ -33,6 +33,9 @@ public class ProjectDraftChange {
     @Column(name = "draft_quantity")
     private Double draftQuantity;
     
+    @Column(name = "draft_selected")
+    private Boolean draftSelected; // Dla akcesoriów - czy produkt jest zaznaczony (checkbox)
+    
     // Draft marża i rabat (tymczasowe)
     @Column(name = "draft_margin_percent")
     private Double draftMarginPercent;
@@ -118,6 +121,14 @@ public class ProjectDraftChange {
     
     public void setDraftQuantity(Double draftQuantity) {
         this.draftQuantity = draftQuantity;
+    }
+    
+    public Boolean getDraftSelected() {
+        return draftSelected;
+    }
+    
+    public void setDraftSelected(Boolean draftSelected) {
+        this.draftSelected = draftSelected;
     }
     
     public Double getDraftMarginPercent() {

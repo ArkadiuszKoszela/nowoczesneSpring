@@ -8,6 +8,7 @@ public class DraftChangeDTO {
     private Double draftPurchasePrice;
     private Double draftSellingPrice;
     private Double draftQuantity;
+    private Boolean draftSelected; // Dla akcesoriów - czy produkt jest zaznaczony (checkbox)
     private Double draftMarginPercent;
     private Double draftDiscountPercent;
     private String priceChangeSource;
@@ -67,6 +68,14 @@ public class DraftChangeDTO {
     
     public void setDraftQuantity(Double draftQuantity) {
         this.draftQuantity = draftQuantity;
+    }
+    
+    public Boolean getDraftSelected() {
+        return draftSelected;
+    }
+    
+    public void setDraftSelected(Boolean draftSelected) {
+        this.draftSelected = draftSelected;
     }
     
     public Double getDraftMarginPercent() {

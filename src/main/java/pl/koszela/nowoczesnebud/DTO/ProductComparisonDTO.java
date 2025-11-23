@@ -56,6 +56,7 @@ public class ProductComparisonDTO {
     private Double draftPurchasePrice;     // Tymczasowa cena zakupu
     private Double draftSellingPrice;      // Tymczasowa cena sprzedaży
     private Double draftQuantity;          // Tymczasowa ilość
+    private Boolean draftSelected;         // Dla akcesoriów - czy produkt jest zaznaczony (checkbox)
     private Double draftMarginPercent;     // Tymczasowa marża % (dla produktu)
     private Double draftDiscountPercent;   // Tymczasowy rabat % (dla produktu)
     

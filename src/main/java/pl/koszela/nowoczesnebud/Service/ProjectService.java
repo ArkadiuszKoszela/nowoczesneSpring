@@ -591,9 +591,21 @@ public class ProjectService {
         
         // 3. Pobierz draft changes (tymczasowe, niezapisane zmiany)
         List<ProjectDraftChange> draftChanges = projectDraftChangeRepository.findByProjectIdAndCategory(projectId, category.name());
+        // ⚠️ WAŻNE: Obsługa duplikatów - jeśli są duplikaty productId, wybierz najnowszy (większe id)
+        // To zapobiega błędom "Duplicate key" gdy w bazie są duplikaty draft changes dla tego samego produktu
         Map<Long, ProjectDraftChange> draftChangesMap = draftChanges.stream()
-            .collect(Collectors.toMap(ProjectDraftChange::getProductId, dc -> dc));
-        logger.info("  Znaleziono {} draft changes", draftChanges.size());
+            .collect(Collectors.toMap(
+                ProjectDraftChange::getProductId, 
+                dc -> dc,
+                (existing, replacement) -> {
+                    // Jeśli istnieje duplikat, wybierz ten z większym id (nowszy)
+                    if (replacement.getId() != null && existing.getId() != null) {
+                        return replacement.getId() > existing.getId() ? replacement : existing;
+                    }
+                    return replacement; // Jeśli brak id, użyj nowego
+                }
+            ));
+        logger.info("  Znaleziono {} draft changes ({} unikalnych)", draftChanges.size(), draftChangesMap.size());
         
         // ⚠️ WAŻNE: Pobierz marżę/rabat kategorii z draft changes (wszystkie produkty mają tę samą wartość)
         // Używane do przywrócenia marży/rabatu w UI po odświeżeniu strony
@@ -667,6 +679,7 @@ public class ProjectService {
                 dto.setDraftPurchasePrice(draft.getDraftPurchasePrice());
                 dto.setDraftSellingPrice(draft.getDraftSellingPrice());
                 dto.setDraftQuantity(draft.getDraftQuantity());
+                dto.setDraftSelected(draft.getDraftSelected()); // ⚠️ WAŻNE: Odczytaj stan checkboxa dla akcesoriów
                 dto.setDraftMarginPercent(draft.getDraftMarginPercent());
                 dto.setDraftDiscountPercent(draft.getDraftDiscountPercent());
                 
@@ -685,6 +698,7 @@ public class ProjectService {
                 dto.setDraftPurchasePrice(null);
                 dto.setDraftSellingPrice(null);
                 dto.setDraftQuantity(null);
+                dto.setDraftSelected(null);
                 dto.setDraftMarginPercent(null);
                 dto.setDraftDiscountPercent(null);
             }
@@ -751,6 +765,7 @@ public class ProjectService {
             draft.setDraftPurchasePrice(dto.getDraftPurchasePrice());
             draft.setDraftSellingPrice(dto.getDraftSellingPrice());
             draft.setDraftQuantity(dto.getDraftQuantity());
+            draft.setDraftSelected(dto.getDraftSelected()); // ⚠️ WAŻNE: Zapisz stan checkboxa dla akcesoriów
             draft.setDraftMarginPercent(dto.getDraftMarginPercent());
             draft.setDraftDiscountPercent(dto.getDraftDiscountPercent());
             draft.setPriceChangeSource(dto.getPriceChangeSource());
@@ -786,6 +801,7 @@ public class ProjectService {
             dto.setDraftPurchasePrice(draft.getDraftPurchasePrice());
             dto.setDraftSellingPrice(draft.getDraftSellingPrice());
             dto.setDraftQuantity(draft.getDraftQuantity());
+            dto.setDraftSelected(draft.getDraftSelected()); // ⚠️ WAŻNE: Odczytaj stan checkboxa dla akcesoriów
             dto.setDraftMarginPercent(draft.getDraftMarginPercent());
             dto.setDraftDiscountPercent(draft.getDraftDiscountPercent());
             dto.setPriceChangeSource(draft.getPriceChangeSource());
