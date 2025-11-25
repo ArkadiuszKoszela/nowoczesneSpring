@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
  * Przechowuje zmiany w Input do czasu kliknięcia "Zapisz projekt"
  */
 @Entity
-@Table(name = "project_draft_inputs")
+@Table(name = "project_draft_inputs_ws")
 public class ProjectDraftInput {
     
     @Id

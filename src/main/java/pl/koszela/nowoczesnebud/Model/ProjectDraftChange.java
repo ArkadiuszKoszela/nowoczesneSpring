@@ -4,7 +4,10 @@ import javax.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "project_draft_changes")
+@Table(name = "project_draft_changes_ws", indexes = {
+    @Index(name = "idx_draft_change_ws_project_category", columnList = "project_id,category"),
+    @Index(name = "idx_draft_change_ws_product_id", columnList = "product_id")
+})
 public class ProjectDraftChange {
     
     @Id
@@ -45,6 +48,11 @@ public class ProjectDraftChange {
     
     @Column(name = "price_change_source")
     private String priceChangeSource; // AUTO, MARGIN, DISCOUNT, MANUAL
+    
+    // Opcja dla grupy produktowej (draft)
+    // ⚠️ WAŻNE: manufacturer i groupName są pobierane z Product przez productId
+    @Column(name = "draft_is_main_option")
+    private Boolean draftIsMainOption; // Czy grupa jest "Główna" (true) czy "Opcjonalna" (false) lub null
     
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -153,6 +161,14 @@ public class ProjectDraftChange {
     
     public void setPriceChangeSource(String priceChangeSource) {
         this.priceChangeSource = priceChangeSource;
+    }
+    
+    public Boolean getDraftIsMainOption() {
+        return draftIsMainOption;
+    }
+    
+    public void setDraftIsMainOption(Boolean draftIsMainOption) {
+        this.draftIsMainOption = draftIsMainOption;
     }
     
     public LocalDateTime getCreatedAt() {

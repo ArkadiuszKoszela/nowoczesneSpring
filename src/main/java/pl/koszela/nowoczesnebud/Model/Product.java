@@ -15,7 +15,10 @@ import java.time.LocalDateTime;
  */
 @Data
 @Entity
-@Table(name = "products")
+@Table(name = "products", indexes = {
+    @Index(name = "idx_product_category", columnList = "category"),
+    @Index(name = "idx_product_mapper_name", columnList = "mapperName")
+})
 public class Product {
 
     @Id

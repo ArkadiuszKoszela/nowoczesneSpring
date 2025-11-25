@@ -13,6 +13,10 @@ public class DraftChangeDTO {
     private Double draftDiscountPercent;
     private String priceChangeSource;
     
+    // Opcja dla grupy produktowej (draft)
+    // ⚠️ WAŻNE: manufacturer i groupName są pobierane z Product przez productId
+    private Boolean draftIsMainOption; // Czy grupa jest "Główna" (true) czy "Opcjonalna" (false) lub null
+    
     // Constructors
     public DraftChangeDTO() {}
     
@@ -100,6 +104,14 @@ public class DraftChangeDTO {
     
     public void setPriceChangeSource(String priceChangeSource) {
         this.priceChangeSource = priceChangeSource;
+    }
+    
+    public Boolean getDraftIsMainOption() {
+        return draftIsMainOption;
+    }
+    
+    public void setDraftIsMainOption(Boolean draftIsMainOption) {
+        this.draftIsMainOption = draftIsMainOption;
     }
 }
 

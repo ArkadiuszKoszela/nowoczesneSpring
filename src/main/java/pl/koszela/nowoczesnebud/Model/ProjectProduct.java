@@ -26,7 +26,10 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "project_products")
+@Table(name = "project_products", indexes = {
+    @Index(name = "idx_project_product_project_category", columnList = "project_id,category"),
+    @Index(name = "idx_project_product_product_id", columnList = "product_id")
+})
 @JsonIgnoreProperties(value = {"hibernateLazyInitializer", "handler"}, ignoreUnknown = true)
 public class ProjectProduct {
 

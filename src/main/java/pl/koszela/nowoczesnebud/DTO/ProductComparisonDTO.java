@@ -65,6 +65,10 @@ public class ProductComparisonDTO {
     // Używane do przywrócenia marży/rabatu w UI po odświeżeniu strony
     private Double categoryDraftMarginPercent;     // Tymczasowa marża % dla całej kategorii
     private Double categoryDraftDiscountPercent;   // Tymczasowy rabat % dla całej kategorii
+    
+    // ========== OPCJA DLA GRUPY PRODUKTOWEJ ==========
+    // ⚠️ WAŻNE: Priorytet: draftIsMainOption (z draft changes) > isMainOption (z ProjectProductGroup) > null
+    private Boolean isMainOption;  // true=Główna, false=Opcjonalna, null=Nie wybrano
 }
 
 

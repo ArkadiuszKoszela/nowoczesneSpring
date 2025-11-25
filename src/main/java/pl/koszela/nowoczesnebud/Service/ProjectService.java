@@ -298,7 +298,8 @@ public class ProjectService {
     }
 
     /**
-     * Usuwa klienta (User) wraz z wszystkimi jego projektami
+     * Usuwa klienta (User) wraz z wszystkimi jego projektami i powiązanymi danymi
+     * Usuwa również draft changes i draft inputs, które nie są automatycznie usuwane przez cascade
      */
     @Transactional
     public void deleteUser(Long userId) {
@@ -316,18 +317,39 @@ public class ProjectService {
         // Znajdź projekt klienta (OneToOne - jeden klient ma jeden projekt)
         Optional<Project> userProjectOpt = projectRepository.findByClientId(userId);
         
-        // Usuń projekt klienta jeśli istnieje (to automatycznie usunie też Input przez cascade)
+        // Usuń projekt klienta jeśli istnieje
         if (userProjectOpt.isPresent()) {
-            logger.info("  Znaleziono projekt dla klienta, usuwanie...");
-            projectRepository.delete(userProjectOpt.get());
-            logger.info("  ✓ Projekt usunięty");
+            Project project = userProjectOpt.get();
+            Long projectId = project.getId();
+            
+            logger.info("  Znaleziono projekt ID {} dla klienta, usuwanie powiązanych danych...", projectId);
+            
+            // ⚠️ WAŻNE: Usuń draft changes (nie są automatycznie usuwane przez cascade, bo nie mają relacji JPA)
+            List<ProjectDraftChange> draftChanges = projectDraftChangeRepository.findByProjectId(projectId);
+            if (!draftChanges.isEmpty()) {
+                logger.info("  Usuwanie {} draft changes...", draftChanges.size());
+                projectDraftChangeRepository.deleteByProjectId(projectId);
+                logger.info("  ✓ Draft changes usunięte");
+            }
+            
+            // ⚠️ WAŻNE: Usuń draft inputs (nie są automatycznie usuwane przez cascade, bo nie mają relacji JPA)
+            List<ProjectDraftInput> draftInputs = projectDraftInputRepository.findByProjectId(projectId);
+            if (!draftInputs.isEmpty()) {
+                logger.info("  Usuwanie {} draft inputs...", draftInputs.size());
+                projectDraftInputRepository.deleteByProjectId(projectId);
+                logger.info("  ✓ Draft inputs usunięte");
+            }
+            
+            // Usuń projekt (to automatycznie usunie też Input, ProjectProduct, ProjectProductGroup przez cascade)
+            projectRepository.delete(project);
+            logger.info("  ✓ Projekt usunięty (wraz z Input, ProjectProduct, ProjectProductGroup)");
         } else {
             logger.info("  Klient nie ma projektu");
         }
         
         // Usuń klienta
         userRepository.delete(user);
-        logger.info("✅ Klient ID {} został usunięty", userId);
+        logger.info("✅ Klient ID {} został usunięty wraz z wszystkimi powiązanymi danymi", userId);
     }
 
     /**
@@ -406,25 +428,15 @@ public class ProjectService {
                     logger.debug("    Aktualizacja istniejącego ProjectProduct dla produktu ID: {}", draft.getProductId());
                 }
                 
-                // Przenieś dane z draft do ProjectProduct
-                if (draft.getDraftRetailPrice() != null) {
-                    pp.setSavedRetailPrice(draft.getDraftRetailPrice());
-                }
-                if (draft.getDraftPurchasePrice() != null) {
-                    pp.setSavedPurchasePrice(draft.getDraftPurchasePrice());
-                }
-                if (draft.getDraftSellingPrice() != null) {
-                    pp.setSavedSellingPrice(draft.getDraftSellingPrice());
-                }
-                if (draft.getDraftQuantity() != null) {
-                    pp.setSavedQuantity(draft.getDraftQuantity());
-                }
-                if (draft.getDraftMarginPercent() != null) {
-                    pp.setSavedMarginPercent(draft.getDraftMarginPercent());
-                }
-                if (draft.getDraftDiscountPercent() != null) {
-                    pp.setSavedDiscountPercent(draft.getDraftDiscountPercent());
-                }
+                // ⚠️ WAŻNE: Przenieś dane z draft do ProjectProduct - BEZWARUNKOWE KOPIOWANIE
+                // Kopiuj dokładnie wartości z draft changes, nawet jeśli są null
+                // To zapewnia, że ręczne zmiany nadpisują wartości z marży/rabatu
+                pp.setSavedRetailPrice(draft.getDraftRetailPrice());
+                pp.setSavedPurchasePrice(draft.getDraftPurchasePrice());
+                pp.setSavedSellingPrice(draft.getDraftSellingPrice());
+                pp.setSavedQuantity(draft.getDraftQuantity());
+                pp.setSavedMarginPercent(draft.getDraftMarginPercent());
+                pp.setSavedDiscountPercent(draft.getDraftDiscountPercent());
                 if (draft.getPriceChangeSource() != null && !draft.getPriceChangeSource().isEmpty()) {
                     try {
                         pp.setPriceChangeSource(PriceChangeSource.valueOf(draft.getPriceChangeSource()));
@@ -437,6 +449,112 @@ public class ProjectService {
             // Usuń draft changes po przeniesieniu
             projectDraftChangeRepository.deleteByProjectId(projectId);
             logger.info("  ✓ Draft changes przeniesione i usunięte");
+            
+            // 2a.1. Przenieś opcje grup z draft changes do ProjectProductGroup
+            // Grupuj draft changes po manufacturer + groupName (pobierane z Product przez productId)
+            // ⚠️ WAŻNE: Obsługuj productId = 0 (z importu) - wtedy szukaj produktów po manufacturer i groupName
+            Map<String, ProjectDraftChange> groupOptionsMap = new java.util.HashMap<>();
+            for (ProjectDraftChange draft : allDraftChanges) {
+                if (draft.getDraftIsMainOption() != null) {
+                    String groupKey = null;
+                    String manufacturer = null;
+                    String groupName = null;
+                    
+                    if (draft.getProductId() != null && draft.getProductId() > 0) {
+                        // Normalny przypadek: productId > 0 - pobierz Product
+                        Optional<Product> productOpt = productRepository.findById(draft.getProductId());
+                        if (productOpt.isPresent()) {
+                            Product product = productOpt.get();
+                            manufacturer = product.getManufacturer();
+                            groupName = product.getGroupName();
+                            if (manufacturer != null && groupName != null) {
+                                groupKey = manufacturer + "_" + groupName + "_" + draft.getCategory();
+                            }
+                        }
+                    } else if (draft.getProductId() != null && draft.getProductId() == 0) {
+                        // ⚠️ WAŻNE: productId = 0 oznacza import - znajdź wszystkie produkty z danym manufacturer i groupName
+                        // (ale nie mamy tych pól w draft changes, więc musimy je znaleźć przez Product)
+                        // W tym przypadku opcje grup są już zapisane dla wszystkich produktów w grupie,
+                        // więc możemy użyć pierwszego produktu z tej grupy
+                        List<Product> productsInGroup = productRepository.findByCategory(ProductCategory.valueOf(draft.getCategory()));
+                        for (Product p : productsInGroup) {
+                            if (p.getManufacturer() != null && p.getGroupName() != null) {
+                                // Sprawdź czy ten produkt ma draft change z draftIsMainOption
+                                // (wszystkie produkty w grupie mają tę samą opcję)
+                                Optional<ProjectDraftChange> groupDraftOpt = allDraftChanges.stream()
+                                    .filter(dc -> dc.getProductId() != null && dc.getProductId().equals(p.getId()) &&
+                                                  dc.getDraftIsMainOption() != null &&
+                                                  dc.getCategory().equals(draft.getCategory()))
+                                    .findFirst();
+                                if (groupDraftOpt.isPresent()) {
+                                    manufacturer = p.getManufacturer();
+                                    groupName = p.getGroupName();
+                                    if (manufacturer != null && groupName != null) {
+                                        groupKey = manufacturer + "_" + groupName + "_" + draft.getCategory();
+                                    }
+                                    break; // Znaleziono - użyj tego produktu
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Zapisz opcję grupy (użyj pierwszej znalezionej dla danej grupy)
+                    if (groupKey != null && !groupOptionsMap.containsKey(groupKey)) {
+                        groupOptionsMap.put(groupKey, draft);
+                    }
+                }
+            }
+            
+            // Utwórz ProjectProductGroup z opcji grup
+            if (!groupOptionsMap.isEmpty()) {
+                logger.info("  Przenoszenie {} opcji grup z draft changes do ProjectProductGroup", groupOptionsMap.size());
+                for (Map.Entry<String, ProjectDraftChange> entry : groupOptionsMap.entrySet()) {
+                    ProjectDraftChange draft = entry.getValue();
+                    String manufacturer = null;
+                    String groupName = null;
+                    
+                    if (draft.getProductId() != null && draft.getProductId() > 0) {
+                        // Normalny przypadek: productId > 0
+                        Optional<Product> productOpt = productRepository.findById(draft.getProductId());
+                        if (productOpt.isPresent()) {
+                            Product product = productOpt.get();
+                            manufacturer = product.getManufacturer();
+                            groupName = product.getGroupName();
+                        }
+                    } else if (draft.getProductId() != null && draft.getProductId() == 0) {
+                        // ⚠️ WAŻNE: productId = 0 - znajdź pierwszy produkt z tej grupy
+                        List<Product> productsInGroup = productRepository.findByCategory(ProductCategory.valueOf(draft.getCategory()));
+                        for (Product p : productsInGroup) {
+                            if (p.getManufacturer() != null && p.getGroupName() != null) {
+                                Optional<ProjectDraftChange> groupDraftOpt = allDraftChanges.stream()
+                                    .filter(dc -> dc.getProductId() != null && dc.getProductId().equals(p.getId()) &&
+                                                  dc.getDraftIsMainOption() != null &&
+                                                  dc.getCategory().equals(draft.getCategory()))
+                                    .findFirst();
+                                if (groupDraftOpt.isPresent()) {
+                                    manufacturer = p.getManufacturer();
+                                    groupName = p.getGroupName();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (manufacturer != null && groupName != null) {
+                        ProjectProductGroup ppg = new ProjectProductGroup();
+                        ppg.setProject(project);
+                        ppg.setCategory(ProductCategory.valueOf(draft.getCategory()));
+                        ppg.setManufacturer(manufacturer);
+                        ppg.setGroupName(groupName);
+                        ppg.setIsMainOption(draft.getDraftIsMainOption());
+                        
+                        project.getProjectProductGroups().add(ppg);
+                        logger.debug("    Utworzono ProjectProductGroup: {} - {} (isMainOption: {})", 
+                                   manufacturer, groupName, draft.getDraftIsMainOption());
+                    }
+                }
+                logger.info("  ✓ Opcje grup przeniesione z draft changes");
+            }
         }
         
         // 2b. NOWE: Przenieś draft inputs do Input
@@ -463,29 +581,43 @@ public class ProjectService {
             logger.info("  ✓ Draft inputs przeniesione i usunięte");
         }
         
-        // 3. Jeśli request zawiera produkty, nadpisz danymi z request
-        // (to może być używane do dodatkowych aktualizacji)
+        // 3. ⚠️ WAŻNE: NIE nadpisuj produktów z request - draft changes mają priorytet!
+        // Produkty z request są używane tylko do dodatkowych aktualizacji (np. productGroups)
+        // Ale wartości z draft changes (skopiowane w sekcji 2) mają najwyższy priorytet
+        // Jeśli request zawiera produkty, które nie są w draft changes, dodaj je
+        // Ale NIE nadpisuj produktów, które już zostały skopiowane z draft changes
         if (request.getProducts() != null && !request.getProducts().isEmpty()) {
-            logger.info("  Aktualizacja {} produktów z request", request.getProducts().size());
+            logger.info("  Sprawdzanie {} produktów z request (dodanie tylko tych, które nie są w draft changes)", request.getProducts().size());
             
-            // Usuń stare ProjectProduct (orphanRemoval usunie je z bazy)
-            project.getProjectProducts().clear();
-            entityManager.flush(); // Wymuś usunięcie przed dodaniem nowych
+            // Utwórz mapę produktów już skopiowanych z draft changes
+            Map<String, ProjectProduct> draftProductsMap = project.getProjectProducts().stream()
+                .collect(Collectors.toMap(
+                    pp -> pp.getProductId() + "_" + pp.getCategory(),
+                    pp -> pp
+                ));
             
+            // Dodaj tylko produkty, które nie są w draft changes
             for (SaveProjectProductDTO dto : request.getProducts()) {
-                ProjectProduct pp = new ProjectProduct();
-                pp.setProject(project);
-                pp.setProductId(dto.getProductId());
-                pp.setCategory(dto.getCategory());
-                pp.setSavedRetailPrice(dto.getSavedRetailPrice());
-                pp.setSavedPurchasePrice(dto.getSavedPurchasePrice());
-                pp.setSavedSellingPrice(dto.getSavedSellingPrice());
-                pp.setSavedQuantity(dto.getSavedQuantity());
-                pp.setPriceChangeSource(dto.getPriceChangeSource());
-                pp.setSavedMarginPercent(dto.getSavedMarginPercent());
-                pp.setSavedDiscountPercent(dto.getSavedDiscountPercent());
-                
-                project.getProjectProducts().add(pp);
+                String key = dto.getProductId() + "_" + dto.getCategory();
+                if (!draftProductsMap.containsKey(key)) {
+                    // Produkt nie jest w draft changes - dodaj z request
+                    ProjectProduct pp = new ProjectProduct();
+                    pp.setProject(project);
+                    pp.setProductId(dto.getProductId());
+                    pp.setCategory(dto.getCategory());
+                    pp.setSavedRetailPrice(dto.getSavedRetailPrice());
+                    pp.setSavedPurchasePrice(dto.getSavedPurchasePrice());
+                    pp.setSavedSellingPrice(dto.getSavedSellingPrice());
+                    pp.setSavedQuantity(dto.getSavedQuantity());
+                    pp.setPriceChangeSource(dto.getPriceChangeSource());
+                    pp.setSavedMarginPercent(dto.getSavedMarginPercent());
+                    pp.setSavedDiscountPercent(dto.getSavedDiscountPercent());
+                    
+                    project.getProjectProducts().add(pp);
+                    logger.debug("    Dodano produkt z request (nie był w draft changes): productId={}, category={}", dto.getProductId(), dto.getCategory());
+                } else {
+                    logger.debug("    Pomiń produkt z request (już jest w draft changes): productId={}, category={}", dto.getProductId(), dto.getCategory());
+                }
             }
         }
         
@@ -619,6 +751,17 @@ public class ProjectService {
             logger.info("  Marża/rabat kategorii z draft: marża={}, rabat={}", categoryDraftMargin, categoryDraftDiscount);
         }
         
+        // 3a. Pobierz opcje grup z ProjectProductGroup (zapisane opcje)
+        List<ProjectProductGroup> productGroups = projectProductGroupRepository.findByProjectIdAndCategory(projectId, category);
+        // ⚠️ WAŻNE: Mapuj opcje grup po manufacturer + groupName (klucz: "manufacturer_groupName")
+        Map<String, Boolean> savedGroupOptionsMap = productGroups.stream()
+            .collect(Collectors.toMap(
+                ppg -> ppg.getManufacturer() + "_" + ppg.getGroupName(),
+                ProjectProductGroup::getIsMainOption,
+                (existing, replacement) -> replacement // Jeśli duplikat, użyj nowszego
+            ));
+        logger.info("  Znaleziono {} opcji grup (zapisane)", savedGroupOptionsMap.size());
+        
         // 4. Połącz cennik + saved + draft i utwórz DTO
         List<ProductComparisonDTO> comparison = new ArrayList<>();
         
@@ -707,6 +850,40 @@ public class ProjectService {
             dto.setCategoryDraftMarginPercent(categoryDraftMargin);
             dto.setCategoryDraftDiscountPercent(categoryDraftDiscount);
             
+            // ⚠️ WAŻNE: Ustaw isMainOption z priorytetami:
+            // 1. draftIsMainOption z draft changes (najwyższy priorytet - tymczasowe, niezapisane)
+            //    - Jeśli draft istnieje i wszystkie inne pola są null, to to jest tylko aktualizacja opcji grupy
+            //    - W takim przypadku użyj draftIsMainOption (może być null - "Nie wybrano")
+            // 2. isMainOption z ProjectProductGroup (zapisane opcje)
+            // 3. null (domyślnie - "Nie wybrano")
+            Boolean isMainOption = null;
+            if (draft != null) {
+                // Sprawdź, czy to jest tylko aktualizacja opcji grupy (wszystkie inne pola są null)
+                boolean isOnlyGroupOptionUpdate = draft.getDraftRetailPrice() == null && 
+                                                  draft.getDraftPurchasePrice() == null && 
+                                                  draft.getDraftSellingPrice() == null && 
+                                                  draft.getDraftQuantity() == null && 
+                                                  draft.getDraftSelected() == null &&
+                                                  draft.getDraftMarginPercent() == null &&
+                                                  draft.getDraftDiscountPercent() == null;
+                
+                if (isOnlyGroupOptionUpdate) {
+                    // To jest tylko aktualizacja opcji grupy - użyj draftIsMainOption (może być null - "Nie wybrano")
+                    isMainOption = draft.getDraftIsMainOption();
+                } else if (draft.getDraftIsMainOption() != null) {
+                    // Jeśli są inne pola, użyj draftIsMainOption tylko jeśli nie jest null
+                    isMainOption = draft.getDraftIsMainOption();
+                }
+            }
+            
+            // Priorytet 2: ProjectProductGroup (tylko jeśli nie ma draft changes z opcjami grup)
+            if (isMainOption == null && current.getManufacturer() != null && current.getGroupName() != null) {
+                String groupKey = current.getManufacturer() + "_" + current.getGroupName();
+                isMainOption = savedGroupOptionsMap.get(groupKey);
+            }
+            
+            dto.setIsMainOption(isMainOption);
+            
             comparison.add(dto);
         }
         
@@ -728,7 +905,7 @@ public class ProjectService {
     
     /**
      * Zapisuje tymczasowe zmiany (draft changes) do bazy danych
-     * Te zmiany są zapisywane w tabeli project_draft_changes
+     * Te zmiany są zapisywane w tabeli project_draft_changes_ws (workset)
      * i nie są jeszcze finalnie zapisane w project_products
      * 
      * @param projectId ID projektu
@@ -760,15 +937,51 @@ public class ProjectService {
                 logger.debug("  Tworzenie nowego draft dla produktu ID: {}", dto.getProductId());
             }
             
-            // Aktualizuj draft fields
-            draft.setDraftRetailPrice(dto.getDraftRetailPrice());
-            draft.setDraftPurchasePrice(dto.getDraftPurchasePrice());
-            draft.setDraftSellingPrice(dto.getDraftSellingPrice());
-            draft.setDraftQuantity(dto.getDraftQuantity());
-            draft.setDraftSelected(dto.getDraftSelected()); // ⚠️ WAŻNE: Zapisz stan checkboxa dla akcesoriów
-            draft.setDraftMarginPercent(dto.getDraftMarginPercent());
-            draft.setDraftDiscountPercent(dto.getDraftDiscountPercent());
-            draft.setPriceChangeSource(dto.getPriceChangeSource());
+            // Aktualizuj draft fields - tylko jeśli są ustawione w DTO (nie nadpisuj null)
+            // ⚠️ WAŻNE: Pozwala to na aktualizację tylko wybranych pól (np. tylko draftIsMainOption)
+            if (dto.getDraftRetailPrice() != null) {
+                draft.setDraftRetailPrice(dto.getDraftRetailPrice());
+            }
+            if (dto.getDraftPurchasePrice() != null) {
+                draft.setDraftPurchasePrice(dto.getDraftPurchasePrice());
+            }
+            if (dto.getDraftSellingPrice() != null) {
+                draft.setDraftSellingPrice(dto.getDraftSellingPrice());
+            }
+            if (dto.getDraftQuantity() != null) {
+                draft.setDraftQuantity(dto.getDraftQuantity());
+            }
+            if (dto.getDraftSelected() != null) {
+                draft.setDraftSelected(dto.getDraftSelected()); // ⚠️ WAŻNE: Zapisz stan checkboxa dla akcesoriów
+            }
+            if (dto.getDraftMarginPercent() != null) {
+                draft.setDraftMarginPercent(dto.getDraftMarginPercent());
+            }
+            if (dto.getDraftDiscountPercent() != null) {
+                draft.setDraftDiscountPercent(dto.getDraftDiscountPercent());
+            }
+            if (dto.getPriceChangeSource() != null && !dto.getPriceChangeSource().isEmpty()) {
+                draft.setPriceChangeSource(dto.getPriceChangeSource());
+            }
+            
+            // Opcja dla grupy produktowej (draft)
+            // ⚠️ WAŻNE: Zawsze aktualizuj draftIsMainOption jeśli to jest tylko aktualizacja opcji grupy
+            // (wszystkie inne pola są null) - pozwala to na ustawienie "Nie wybrano" (null)
+            boolean isOnlyGroupOptionUpdate = dto.getDraftRetailPrice() == null && 
+                                              dto.getDraftPurchasePrice() == null && 
+                                              dto.getDraftSellingPrice() == null && 
+                                              dto.getDraftQuantity() == null && 
+                                              dto.getDraftSelected() == null &&
+                                              dto.getDraftMarginPercent() == null &&
+                                              dto.getDraftDiscountPercent() == null;
+            
+            if (isOnlyGroupOptionUpdate) {
+                // To jest tylko aktualizacja opcji grupy - zawsze aktualizuj (nawet jeśli null - "Nie wybrano")
+                draft.setDraftIsMainOption(dto.getDraftIsMainOption());
+            } else if (dto.getDraftIsMainOption() != null) {
+                // Jeśli są inne pola, aktualizuj tylko jeśli draftIsMainOption nie jest null
+                draft.setDraftIsMainOption(dto.getDraftIsMainOption());
+            }
             
             projectDraftChangeRepository.save(draft);
         }
@@ -805,6 +1018,11 @@ public class ProjectService {
             dto.setDraftMarginPercent(draft.getDraftMarginPercent());
             dto.setDraftDiscountPercent(draft.getDraftDiscountPercent());
             dto.setPriceChangeSource(draft.getPriceChangeSource());
+            
+            // Opcja dla grupy produktowej (draft)
+            // ⚠️ WAŻNE: manufacturer i groupName są pobierane z Product przez productId
+            dto.setDraftIsMainOption(draft.getDraftIsMainOption());
+            
             return dto;
         }).collect(Collectors.toList());
         
