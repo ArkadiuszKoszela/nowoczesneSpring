@@ -63,13 +63,16 @@ public class ProductService {
     public List<Product> importProductsWithCustomNames(
             List<MultipartFile> files,
             List<String> customNames,
+            List<String> manufacturers,
+            List<String> groupNames,
             ProductCategory category) throws IOException {
 
         // Pobierz istniejące produkty tej kategorii (do sprawdzenia duplikatów)
         List<Product> existingProducts = productRepository.findByCategory(category);
 
         // Importuj nowe produkty z plików
-        List<Product> importedProducts = productImportService.importProductsWithCustomNames(files, customNames, category);
+        List<Product> importedProducts = productImportService.importProductsWithCustomNames(
+            files, customNames, manufacturers, groupNames, category);
 
         // Sprawdź duplikaty i filtruj tylko nowe produkty
         List<Product> newProducts = new ArrayList<>();
@@ -316,6 +319,26 @@ public class ProductService {
         List<Product> originalProducts = productRepository.findByCategory(category);
         logger.info("Liczba produktów w kategorii {}: {}", category, originalProducts.size());
         
+        // Loguj przykładowe produkty z mapperName
+        if (logger.isDebugEnabled()) {
+            List<Product> productsWithMapper = originalProducts.stream()
+                .filter(p -> p.getMapperName() != null && !p.getMapperName().isEmpty())
+                .limit(5)
+                .collect(java.util.stream.Collectors.toList());
+            logger.debug("Przykładowe produkty {} z mapperName (max 5):", category);
+            for (Product p : productsWithMapper) {
+                logger.debug("  - id: {}, name: '{}', mapperName: '{}'", p.getId(), p.getName(), p.getMapperName());
+            }
+            
+            List<String> inputMapperNames = inputList.stream()
+                .filter(i -> i.getMapperName() != null && !i.getMapperName().isEmpty())
+                .map(Input::getMapperName)
+                .distinct()
+                .limit(10)
+                .collect(java.util.stream.Collectors.toList());
+            logger.debug("Przykładowe inputy mapperName (max 10): {}", inputMapperNames);
+        }
+        
         // ⚠️ WAŻNE: Tworzymy KOPIE produktów zamiast modyfikować oryginalne encje
         // To zapobiega automatycznemu zapisowi zmian przez Hibernate
         List<Product> productsCopy = new ArrayList<>();
@@ -326,45 +349,87 @@ public class ProductService {
 
         int updatedCount = 0;
         for (Product product : productsCopy) {
+            // Loguj tylko produkty z mapperName dla kategorii ACCESSORY
+            if (category == ProductCategory.ACCESSORY && product.getMapperName() != null) {
+                logger.debug("🔍 Sprawdzam produkt ACCESSORY: id={}, name='{}', mapperName='{}', quantityConverter={}", 
+                    product.getId(), product.getName(), product.getMapperName(), product.getQuantityConverter());
+            }
+            
             for (Input input : inputList) {
                 if (product.getMapperName() != null && 
                     product.getMapperName().equalsIgnoreCase(input.getMapperName())) {
                     
-                    logger.debug("MATCH: {} (Input: {})", product.getMapperName(), input.getQuantity());
+                    logger.info("✅ MATCH dla kategorii {}: produkt mapperName='{}' pasuje do input mapperName='{}', inputQuantity={}", 
+                        category, product.getMapperName(), input.getMapperName(), input.getQuantity());
                     
                     // Sprawdź czy quantity nie jest null
                     if (input.getQuantity() == null) {
-                        logger.debug("  Pomijam - quantity jest null dla input: {}", input.getMapperName());
+                        logger.warn("  ⚠️ Pomijam - quantity jest null dla input: {}", input.getMapperName());
+                        continue;
+                    }
+                    
+                    // Sprawdź czy quantity > 0
+                    if (input.getQuantity() <= 0) {
+                        logger.warn("  ⚠️ Pomijam - quantity <= 0 dla input: {} (quantity={})", input.getMapperName(), input.getQuantity());
                         continue;
                     }
                     
                     // 1. Oblicz ilość (na KOPII, nie na oryginale!)
-                    double quantity = priceCalculationService.calculateProductQuantity(
-                        input.getQuantity(), 
-                        product.getQuantityConverter()
-                    );
-                    product.setQuantity(quantity);
-                    logger.debug("  Ilość obliczona: {}", quantity);
-
-                    // 2. Przelicz cenę zakupu jeśli nie jest ustawiona (na KOPII!)
-                    if (product.getPurchasePrice() == 0.00 && product.getRetailPrice() != 0.00) {
-                        double purchasePrice = priceCalculationService.calculatePurchasePrice(product);
-                        product.setPurchasePrice(purchasePrice);
-                        logger.debug("  Cena zakupu obliczona: {}", purchasePrice);
+                    double quantityConverter = product.getQuantityConverter() != null ? product.getQuantityConverter() : 1.0;
+                    if (quantityConverter <= 0) {
+                        logger.warn("  ⚠️ quantityConverter <= 0 dla produktu {}: {}", product.getId(), quantityConverter);
+                        quantityConverter = 1.0; // Użyj domyślnej wartości
                     }
                     
-                    // 3. Ustaw cenę sprzedaży = cena katalogowa (na KOPII!)
-                    // Zysk = (retailPrice - purchasePrice) × quantity
-                    if (product.getRetailPrice() > 0.00) {
-                        product.setSellingPrice(product.getRetailPrice());
-                        logger.debug("  Cena sprzedaży = retailPrice: {} (zysk na jednostce: {})", 
-                            product.getRetailPrice(), 
-                            product.getRetailPrice() - product.getPurchasePrice());
-                    } else if (product.getPurchasePrice() > 0.00 && product.getMarginPercent() > 0.00) {
-                        // Jeśli nie ma retailPrice, ale jest marża, oblicz z marży
-                        double sellingPrice = priceCalculationService.calculateRetailPrice(product);
-                        product.setSellingPrice(sellingPrice);
-                        logger.debug("  Cena sprzedaży obliczona z marży: {} (marża: {}%)", sellingPrice, product.getMarginPercent());
+                    double quantity = priceCalculationService.calculateProductQuantity(
+                        input.getQuantity(), 
+                        quantityConverter
+                    );
+                    product.setQuantity(quantity);
+                    logger.info("  ✅ Ilość obliczona dla produktu {} ({}): inputQuantity={} * quantityConverter={} = {}", 
+                        product.getId(), product.getName(), input.getQuantity(), quantityConverter, quantity);
+                    
+                    if (quantity <= 0) {
+                        logger.warn("  ⚠️ UWAGA: Obliczona quantity <= 0: {}", quantity);
+                    }
+
+                    // 2. Przelicz cenę zakupu jeśli nie jest ustawiona (na KOPII!)
+                    // ⚠️ WAŻNE: Dla akcesoriów retailPrice może być null - sprawdź to przed porównaniem
+                    if (product.getPurchasePrice() == null || product.getPurchasePrice() == 0.00) {
+                        if (product.getRetailPrice() != null && product.getRetailPrice() != 0.00) {
+                            double purchasePrice = priceCalculationService.calculatePurchasePrice(product);
+                            product.setPurchasePrice(purchasePrice);
+                            logger.debug("  Cena zakupu obliczona: {}", purchasePrice);
+                        }
+                    }
+                    
+                    // 3. Ustaw cenę sprzedaży (na KOPII!)
+                    // Dla dachówek i rynien: cena sprzedaży = cena katalogowa (retailPrice)
+                    // Dla akcesoriów: cena sprzedaży = cena zakupu (purchasePrice) - domyślnie
+                    // Zysk = (sellingPrice - purchasePrice) × quantity
+                    // ⚠️ WAŻNE: Dla akcesoriów retailPrice może być null - sprawdź to przed porównaniem
+                    if (product.getCategory() == ProductCategory.ACCESSORY) {
+                        // Dla akcesoriów: domyślnie cena sprzedaży = cena zakupu
+                        if (product.getPurchasePrice() != null && product.getPurchasePrice() > 0.00) {
+                            product.setSellingPrice(product.getPurchasePrice());
+                            logger.debug("  Akcesoria - cena sprzedaży = cena zakupu: {} (zysk = 0)", product.getPurchasePrice());
+                        } else {
+                            product.setSellingPrice(null);
+                            logger.debug("  Akcesoria - brak ceny zakupu, cena sprzedaży ustawiona na null");
+                        }
+                    } else {
+                        // Dla dachówek i rynien: cena sprzedaży = cena katalogowa
+                        if (product.getRetailPrice() != null && product.getRetailPrice() > 0.00) {
+                            product.setSellingPrice(product.getRetailPrice());
+                            logger.debug("  Cena sprzedaży = retailPrice: {} (zysk na jednostce: {})", 
+                                product.getRetailPrice(), 
+                                product.getRetailPrice() - (product.getPurchasePrice() != null ? product.getPurchasePrice() : 0.0));
+                        } else if (product.getPurchasePrice() != null && product.getPurchasePrice() > 0.00 && product.getMarginPercent() != null && product.getMarginPercent() > 0.00) {
+                            // Jeśli nie ma retailPrice, ale jest marża, oblicz z marży
+                            double sellingPrice = priceCalculationService.calculateRetailPrice(product);
+                            product.setSellingPrice(sellingPrice);
+                            logger.debug("  Cena sprzedaży obliczona z marży: {} (marża: {}%)", sellingPrice, product.getMarginPercent());
+                        }
                     }
                     
                     updatedCount++;
@@ -518,7 +583,15 @@ public class ProductService {
 
         for (Product product : products) {
             // Oblicz nową cenę sprzedaży (retailPrice - rabat) - TYLKO W PAMIĘCI
-            if (product.getRetailPrice() > 0) {
+            // ⚠️ WAŻNE: Dla akcesoriów nie stosujemy rabatów - pomijamy je
+            if (product.getCategory() == ProductCategory.ACCESSORY) {
+                // Akcesoria nie mają rabatów - pomijamy
+                logger.debug("  {} (AKCESORIA): pomijam - akcesoria nie mają rabatów", product.getName());
+                continue;
+            }
+            
+            // Dla dachówek i rynien: rabat od retailPrice
+            if (product.getRetailPrice() != null && product.getRetailPrice() > 0) {
                 double sellingPrice = priceCalculationService.calculateSellingPriceWithDiscount(
                     product, discountPercent
                 );
@@ -796,7 +869,7 @@ public class ProductService {
         logger.info("  Kategoria: {}", category);
         logger.info("  Producent: {}", manufacturer);
         logger.info("  Grupa: {}", groupName != null ? groupName : "WSZYSTKIE (cały producent)");
-        logger.info("  Typ produktu: {}", productType != null ? productType : "WSZYSTKIE");
+        logger.info("  Typ produktu: {}", productType != null && !"ALL".equals(productType) ? productType : "WSZYSTKIE");
         logger.info("  Rabaty: basic={}, additional={}, promotion={}, skonto={}",
                    basicDiscount, additionalDiscount, promotionDiscount, skontoDiscount);
         logger.info("  Metoda obliczania: {}", discountCalculationMethod);
@@ -819,11 +892,11 @@ public class ProductService {
         List<Product> products = productRepository.findByCategory(category).stream()
                 .filter(p -> manufacturer.equals(p.getManufacturer()))
                 .filter(p -> groupName == null || groupName.equals(p.getGroupName()))
-                .filter(p -> productType == null || productType.equals(p.getProductType())) // Filtruj po typie produktu
+                .filter(p -> productType == null || "ALL".equals(productType) || productType.equals(p.getProductType())) // Filtruj po typie produktu ("ALL" = wszystkie typy)
                 .toList();
         
         if (products.isEmpty()) {
-            String typeInfo = productType != null ? " typu " + productType : "";
+            String typeInfo = (productType != null && !"ALL".equals(productType)) ? " typu " + productType : "";
             logger.warn("⚠️ Nie znaleziono produktów dla {} / {}{}", 
                        manufacturer, 
                        groupName != null ? groupName : "całego producenta",
@@ -831,7 +904,7 @@ public class ProductService {
             return products;
         }
         
-        String typeInfo = productType != null ? " typu " + productType : "";
+        String typeInfo = (productType != null && !"ALL".equals(productType)) ? " typu " + productType : "";
         logger.info("📦 Znaleziono {} produktów{}", products.size(), typeInfo);
         
         // Zastosuj rabaty do wszystkich produktów

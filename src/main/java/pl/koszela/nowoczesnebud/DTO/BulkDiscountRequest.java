@@ -37,7 +37,7 @@ public class BulkDiscountRequest {
     @Max(value = 100, message = "Rabat nie może przekraczać 100%")
     private Integer skontoDiscount;
     
-    // Typ produktu (opcjonalny - jeśli null, rabaty są stosowane do wszystkich produktów)
+    // Typ produktu (opcjonalny - jeśli null lub "ALL", rabaty są stosowane do wszystkich produktów)
     private String productType;
     
     // Metoda obliczania rabatu (wymagana)

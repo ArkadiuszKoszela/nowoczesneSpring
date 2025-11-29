@@ -2,6 +2,7 @@ package pl.koszela.nowoczesnebud.Service;
 
 import org.springframework.stereotype.Service;
 import pl.koszela.nowoczesnebud.Model.Product;
+import pl.koszela.nowoczesnebud.Model.ProductCategory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,16 +23,19 @@ public class ProductValidationService {
         // === WALIDACJA KRYTYCZNA (błędy) ===
 
         // 1. Cena sprzedaży nie może być niższa niż cena zakupu (STRATA!)
-        if (product.getSellingPrice() != null && product.getPurchasePrice() != null &&
-            product.getSellingPrice() > 0 && product.getPurchasePrice() > 0) {
-            
-            if (product.getSellingPrice() < product.getPurchasePrice()) {
-                errors.add(String.format(
-                    "Produkt '%s': Cena sprzedaży (%.2f PLN) jest niższa niż cena zakupu (%.2f PLN) - STRATA!",
-                    product.getName(),
-                    product.getSellingPrice(),
-                    product.getPurchasePrice()
-                ));
+        // ⚠️ UWAGA: Dla akcesoriów (ACCESSORY) nie sprawdzamy tej walidacji - akcesoria mają tylko cenę zakupu
+        if (product.getCategory() != null && product.getCategory() != ProductCategory.ACCESSORY) {
+            if (product.getSellingPrice() != null && product.getPurchasePrice() != null &&
+                product.getSellingPrice() > 0 && product.getPurchasePrice() > 0) {
+                
+                if (product.getSellingPrice() < product.getPurchasePrice()) {
+                    errors.add(String.format(
+                        "Produkt '%s': Cena sprzedaży (%.2f PLN) jest niższa niż cena zakupu (%.2f PLN) - STRATA!",
+                        product.getName(),
+                        product.getSellingPrice(),
+                        product.getPurchasePrice()
+                    ));
+                }
             }
         }
 

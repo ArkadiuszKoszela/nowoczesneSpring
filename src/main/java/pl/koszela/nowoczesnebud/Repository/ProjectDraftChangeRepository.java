@@ -16,6 +16,8 @@ public interface ProjectDraftChangeRepository extends JpaRepository<ProjectDraft
     
     void deleteByProjectId(Long projectId);
     
+    void deleteByProjectIdAndCategory(Long projectId, String category);
+    
     Optional<ProjectDraftChange> findByProjectIdAndProductIdAndCategory(Long projectId, Long productId, String category);
 }
 

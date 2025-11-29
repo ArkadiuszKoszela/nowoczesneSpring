@@ -173,7 +173,7 @@ public class ProductController {
     }
 
     /**
-     * Import produktów z nazwami
+     * Import produktów z nazwami, producentami i grupami
      * POST /api/products/import-with-names?category=TILE
      * ZASTĘPUJE: /api/tiles/importWithNames
      */
@@ -181,7 +181,21 @@ public class ProductController {
     public ResponseEntity<List<Product>> importProductsWithNames(
             @RequestParam("file[]") MultipartFile[] files,
             @RequestParam("name[]") String[] names,
+            @RequestParam(value = "manufacturer[]", required = false) String[] manufacturers,
+            @RequestParam(value = "groupName[]", required = false) String[] groupNames,
             @RequestParam ProductCategory category) {
+        
+        logger.info("📥 Import produktów - kategoria: {}, plików: {}", category, files.length);
+        if (manufacturers != null) {
+            logger.info("   → Producenci z frontendu: {}", Arrays.toString(manufacturers));
+        } else {
+            logger.info("   → Producenci z frontendu: BRAK (null)");
+        }
+        if (groupNames != null) {
+            logger.info("   → Grupy z frontendu: {}", Arrays.toString(groupNames));
+        } else {
+            logger.info("   → Grupy z frontendu: BRAK (null)");
+        }
         
         if (files.length != names.length) {
             return ResponseEntity.badRequest().build();
@@ -190,8 +204,11 @@ public class ProductController {
         try {
             List<MultipartFile> fileList = Arrays.asList(files);
             List<String> nameList = Arrays.asList(names);
+            List<String> manufacturerList = manufacturers != null ? Arrays.asList(manufacturers) : null;
+            List<String> groupNameList = groupNames != null ? Arrays.asList(groupNames) : null;
+            
             List<Product> products = productService.importProductsWithCustomNames(
-                fileList, nameList, category
+                fileList, nameList, manufacturerList, groupNameList, category
             );
             return ResponseEntity.ok(products);
         } catch (IOException e) {

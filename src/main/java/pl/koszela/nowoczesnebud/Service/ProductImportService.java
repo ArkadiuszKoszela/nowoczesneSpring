@@ -4,6 +4,8 @@ import com.poiji.bind.Poiji;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import pl.koszela.nowoczesnebud.Model.DiscountCalculationMethod;
@@ -22,6 +24,8 @@ import java.util.*;
 @Service
 public class ProductImportService {
 
+    private static final Logger logger = LoggerFactory.getLogger(ProductImportService.class);
+    
     private final PriceCalculationService priceCalculationService;
     private final DiscountCalculationService discountCalculationService;
 
@@ -32,12 +36,14 @@ public class ProductImportService {
     }
 
     /**
-     * Import z nazwami użytkownika (główna metoda)
-     * Format pliku: "Manufacturer-GroupName.xlsx" lub własne nazwy
+     * Import z nazwami użytkownika, producentami i grupami (główna metoda)
+     * Jeśli producent/grupa nie są podane z frontendu, wyciąga z nazwy pliku jako fallback
      */
     public List<Product> importProductsWithCustomNames(
             List<MultipartFile> files, 
-            List<String> customGroupNames, 
+            List<String> customGroupNames,
+            List<String> manufacturers,
+            List<String> groupNames,
             ProductCategory category) throws IOException {
 
         if (files.size() != customGroupNames.size()) {
@@ -49,6 +55,8 @@ public class ProductImportService {
         for (int i = 0; i < files.size(); i++) {
             MultipartFile multipartFile = files.get(i);
             String customGroupName = customGroupNames.get(i);
+            String customManufacturer = (manufacturers != null && i < manufacturers.size()) ? manufacturers.get(i) : null;
+            String customGroupNameFromParam = (groupNames != null && i < groupNames.size()) ? groupNames.get(i) : null;
 
             File file = convertMultiPartToFile(multipartFile);
             String fileName = multipartFile.getOriginalFilename();
@@ -70,17 +78,44 @@ public class ProductImportService {
                 mappedFile.delete();
             }
 
-            String manufacturer = getManufacturer(fileName);
+            // ⚠️ WAŻNE: Frontend zawsze wysyła wartości (editableManufacturer i editableGroupName)
+            // Frontend dba o walidację - wartości nie mogą być puste
+            // Używamy BEZPOŚREDNIO wartości z frontendu (z sugestii), bez fallbacku do parsowania z nazwy pliku
+            String manufacturer;
+            boolean manufacturerFromFrontend = true; // Zawsze z frontendu (walidacja w frontendzie)
+            if (customManufacturer != null && !customManufacturer.trim().isEmpty()) {
+                // Frontend przesłał wartość - użyj jej BEZPOŚREDNIO (z sugestii)
+                manufacturer = customManufacturer.trim();
+            } else {
+                // Frontend nie przesłał wartości - to nie powinno się zdarzyć (walidacja w frontendzie)
+                // Fallback tylko dla bezpieczeństwa
+                logger.warn("⚠️ Frontend nie przesłał producenta dla pliku: {} - używam fallback z nazwy pliku", fileName);
+                manufacturer = getManufacturer(fileName);
+                manufacturerFromFrontend = false;
+            }
             
-            // Jeśli użytkownik nie podał nazwy grupy (lub jest pusta), wyciągnij z nazwy pliku
-            String finalGroupName = customGroupName;
-            if (finalGroupName == null || finalGroupName.trim().isEmpty()) {
+            // ⚠️ WAŻNE: Frontend zawsze wysyła wartości (editableGroupName)
+            // Frontend dba o walidację - wartości nie mogą być puste
+            // Używamy BEZPOŚREDNIO wartości z frontendu (z sugestii), bez fallbacku do parsowania z nazwy pliku
+            String finalGroupName;
+            boolean groupFromFrontend = true; // Zawsze z frontendu (walidacja w frontendzie)
+            if (customGroupNameFromParam != null && !customGroupNameFromParam.trim().isEmpty()) {
+                // Frontend przesłał wartość w groupName[] - użyj jej BEZPOŚREDNIO (z sugestii)
+                finalGroupName = customGroupNameFromParam.trim();
+            } else if (customGroupName != null && !customGroupName.trim().isEmpty()) {
+                // Frontend przesłał wartość w name[] - użyj jej (fallback jeśli groupName[] jest puste)
+                finalGroupName = customGroupName.trim();
+            } else {
+                // Frontend nie przesłał wartości - to nie powinno się zdarzyć (walidacja w frontendzie)
+                // Fallback tylko dla bezpieczeństwa
+                logger.warn("⚠️ Frontend nie przesłał grupy produktowej dla pliku: {} - używam fallback z nazwy pliku", fileName);
                 finalGroupName = extractGroupNameFromFileName(fileName);
+                groupFromFrontend = false;
             }
             
             System.out.println("🔹 Import pliku: " + fileName);
-            System.out.println("   → Producent: " + manufacturer);
-            System.out.println("   → Grupa: " + finalGroupName);
+            System.out.println("   → Producent: " + manufacturer + (manufacturerFromFrontend ? " (z frontendu)" : " (z nazwy pliku - fallback)"));
+            System.out.println("   → Grupa: " + finalGroupName + (groupFromFrontend ? " (z frontendu)" : " (z nazwy pliku - fallback)"));
 
             for (Product product : productsFromFile) {
                 product.setManufacturer(manufacturer);
@@ -115,11 +150,22 @@ public class ProductImportService {
                     product.setPurchasePrice(purchasePrice);
                 }
                 
-                // Ustaw cenę sprzedaży = cena katalogowa (to co płaci klient!)
-                // Zysk = (retailPrice - purchasePrice) × quantity
-                if (product.getRetailPrice() > 0.00) {
-                    product.setSellingPrice(product.getRetailPrice());
-                    System.out.println("🔹 Cena sprzedaży = " + product.getRetailPrice() + " (zysk/szt: " + (product.getRetailPrice() - product.getPurchasePrice()) + ")");
+                // Ustaw cenę sprzedaży
+                // Dla dachówek i rynien: cena sprzedaży = cena katalogowa (retailPrice)
+                // Dla akcesoriów: cena sprzedaży = cena zakupu (purchasePrice) - domyślnie
+                // Zysk = (sellingPrice - purchasePrice) × quantity
+                if (product.getCategory() == ProductCategory.ACCESSORY) {
+                    // Dla akcesoriów: domyślnie cena sprzedaży = cena zakupu
+                    if (product.getPurchasePrice() != null && product.getPurchasePrice() > 0.00) {
+                        product.setSellingPrice(product.getPurchasePrice());
+                        System.out.println("🔹 Akcesoria - cena sprzedaży = cena zakupu: " + product.getPurchasePrice() + " (zysk = 0)");
+                    }
+                } else {
+                    // Dla dachówek i rynien: cena sprzedaży = cena katalogowa
+                    if (product.getRetailPrice() != null && product.getRetailPrice() > 0.00) {
+                        product.setSellingPrice(product.getRetailPrice());
+                        System.out.println("🔹 Cena sprzedaży = " + product.getRetailPrice() + " (zysk/szt: " + (product.getRetailPrice() - (product.getPurchasePrice() != null ? product.getPurchasePrice() : 0.0)) + ")");
+                    }
                 }
             }
 

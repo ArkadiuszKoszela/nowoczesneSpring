@@ -778,6 +778,11 @@ public class ProjectService {
             dto.setQuantityConverter(current.getQuantityConverter());
             dto.setMapperName(current.getMapperName());
             
+            // Typ akcesorium (tylko dla ACCESSORY)
+            if (category == ProductCategory.ACCESSORY) {
+                dto.setAccessoryType(current.getAccessoryType());
+            }
+            
             // Aktualne ceny z cennika
             dto.setCurrentRetailPrice(current.getRetailPrice());
             dto.setCurrentPurchasePrice(current.getPurchasePrice());
@@ -920,73 +925,36 @@ public class ProjectService {
             return;
         }
         
+        // ⚠️ WAŻNE: Najpierw usuń WSZYSTKIE stare draft changes dla tej kategorii
+        // To zapewni, że zawsze mamy tylko aktualne zmiany (nie ma starych, nieaktualnych wpisów)
+        // Każdy użytkownik będzie miał taką samą liczbę wpisów - tylko te z aktualnymi zmianami
+        projectDraftChangeRepository.deleteByProjectIdAndCategory(projectId, request.getCategory());
+        logger.info("  Usunięto stare draft changes dla kategorii: {}", request.getCategory());
+        
+        // Teraz zapisz nowe zmiany (zawierają wszystkie aktualne zmiany dla tej kategorii)
         for (DraftChangeDTO dto : request.getChanges()) {
-            // Znajdź istniejący draft lub stwórz nowy
-            Optional<ProjectDraftChange> existingOpt = projectDraftChangeRepository
-                .findByProjectIdAndProductIdAndCategory(projectId, dto.getProductId(), dto.getCategory());
+            ProjectDraftChange draft = new ProjectDraftChange();
+            draft.setProjectId(projectId);
+            draft.setProductId(dto.getProductId());
+            draft.setCategory(dto.getCategory());
             
-            ProjectDraftChange draft;
-            if (existingOpt.isPresent()) {
-                draft = existingOpt.get();
-                logger.debug("  Aktualizacja istniejącego draft dla produktu ID: {}", dto.getProductId());
-            } else {
-                draft = new ProjectDraftChange();
-                draft.setProjectId(projectId);
-                draft.setProductId(dto.getProductId());
-                draft.setCategory(dto.getCategory());
-                logger.debug("  Tworzenie nowego draft dla produktu ID: {}", dto.getProductId());
-            }
-            
-            // Aktualizuj draft fields - tylko jeśli są ustawione w DTO (nie nadpisuj null)
-            // ⚠️ WAŻNE: Pozwala to na aktualizację tylko wybranych pól (np. tylko draftIsMainOption)
-            if (dto.getDraftRetailPrice() != null) {
-                draft.setDraftRetailPrice(dto.getDraftRetailPrice());
-            }
-            if (dto.getDraftPurchasePrice() != null) {
-                draft.setDraftPurchasePrice(dto.getDraftPurchasePrice());
-            }
-            if (dto.getDraftSellingPrice() != null) {
-                draft.setDraftSellingPrice(dto.getDraftSellingPrice());
-            }
-            if (dto.getDraftQuantity() != null) {
-                draft.setDraftQuantity(dto.getDraftQuantity());
-            }
-            if (dto.getDraftSelected() != null) {
-                draft.setDraftSelected(dto.getDraftSelected()); // ⚠️ WAŻNE: Zapisz stan checkboxa dla akcesoriów
-            }
-            if (dto.getDraftMarginPercent() != null) {
-                draft.setDraftMarginPercent(dto.getDraftMarginPercent());
-            }
-            if (dto.getDraftDiscountPercent() != null) {
-                draft.setDraftDiscountPercent(dto.getDraftDiscountPercent());
-            }
+            // Ustaw wszystkie pola (zapisujemy pełny stan - nie sprawdzamy czy są null)
+            draft.setDraftRetailPrice(dto.getDraftRetailPrice());
+            draft.setDraftPurchasePrice(dto.getDraftPurchasePrice());
+            draft.setDraftSellingPrice(dto.getDraftSellingPrice());
+            draft.setDraftQuantity(dto.getDraftQuantity());
+            draft.setDraftSelected(dto.getDraftSelected());
+            draft.setDraftMarginPercent(dto.getDraftMarginPercent());
+            draft.setDraftDiscountPercent(dto.getDraftDiscountPercent());
             if (dto.getPriceChangeSource() != null && !dto.getPriceChangeSource().isEmpty()) {
                 draft.setPriceChangeSource(dto.getPriceChangeSource());
             }
-            
-            // Opcja dla grupy produktowej (draft)
-            // ⚠️ WAŻNE: Zawsze aktualizuj draftIsMainOption jeśli to jest tylko aktualizacja opcji grupy
-            // (wszystkie inne pola są null) - pozwala to na ustawienie "Nie wybrano" (null)
-            boolean isOnlyGroupOptionUpdate = dto.getDraftRetailPrice() == null && 
-                                              dto.getDraftPurchasePrice() == null && 
-                                              dto.getDraftSellingPrice() == null && 
-                                              dto.getDraftQuantity() == null && 
-                                              dto.getDraftSelected() == null &&
-                                              dto.getDraftMarginPercent() == null &&
-                                              dto.getDraftDiscountPercent() == null;
-            
-            if (isOnlyGroupOptionUpdate) {
-                // To jest tylko aktualizacja opcji grupy - zawsze aktualizuj (nawet jeśli null - "Nie wybrano")
-                draft.setDraftIsMainOption(dto.getDraftIsMainOption());
-            } else if (dto.getDraftIsMainOption() != null) {
-                // Jeśli są inne pola, aktualizuj tylko jeśli draftIsMainOption nie jest null
-                draft.setDraftIsMainOption(dto.getDraftIsMainOption());
-            }
+            draft.setDraftIsMainOption(dto.getDraftIsMainOption());
             
             projectDraftChangeRepository.save(draft);
         }
         
-        logger.info("✅ Zapisano {} draft changes", request.getChanges().size());
+        logger.info("✅ Zapisano {} draft changes (usunięto stare, zapisano nowe)", request.getChanges().size());
     }
     
     /**

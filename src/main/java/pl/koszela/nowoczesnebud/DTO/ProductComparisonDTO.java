@@ -69,6 +69,9 @@ public class ProductComparisonDTO {
     // ========== OPCJA DLA GRUPY PRODUKTOWEJ ==========
     // ⚠️ WAŻNE: Priorytet: draftIsMainOption (z draft changes) > isMainOption (z ProjectProductGroup) > null
     private Boolean isMainOption;  // true=Główna, false=Opcjonalna, null=Nie wybrano
+    
+    // ========== TYP AKCESORIUM (tylko dla ACCESSORY) ==========
+    private String accessoryType;  // STANDARD, PREMIUM, LUX
 }
 
 

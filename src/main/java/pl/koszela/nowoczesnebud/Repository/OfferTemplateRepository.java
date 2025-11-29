@@ -32,3 +32,4 @@ public interface OfferTemplateRepository extends JpaRepository<OfferTemplate, Lo
 
 
 
+
