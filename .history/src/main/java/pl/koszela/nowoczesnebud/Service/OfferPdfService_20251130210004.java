@@ -77,6 +77,8 @@ public class OfferPdfService {
      * Renderuje szablon HTML z danymi projektu
      */
     private String renderTemplateWithData(OfferTemplate template, Project project) {
+        logger.debug("Renderowanie szablonu ID {} dla projektu ID {}", template.getId(), project.getId());
+        
         // Przygotuj dane dla Thymeleaf
         Context context = new Context();
         context.setVariable("project", project);
@@ -104,11 +106,13 @@ public class OfferPdfService {
         // ⚠️ WAŻNE: Użyj tego samego mechanizmu co frontend - getProductComparison()
         // To zapewnia, że placeholdery w PDF będą pokazywać dokładnie te same dane co tabele w UI
         List<Product> allProducts = getProductsFromProductComparison(project);
+        logger.info("📦 Pobrano {} produktów z getProductComparison (ten sam mechanizm co frontend)", allProducts.size());
         
         // Filtruj tylko produkty z quantity > 0
         allProducts = allProducts.stream()
                 .filter(p -> p.getQuantity() != null && p.getQuantity() > 0)
                 .collect(Collectors.toList());
+        logger.info("📦 Po filtrowaniu quantity > 0: {} produktów", allProducts.size());
         
         // Podziel po kategoriach
         List<Product> allTiles = allProducts.stream()
@@ -120,6 +124,9 @@ public class OfferPdfService {
         List<Product> allAccessories = allProducts.stream()
                 .filter(p -> p.getCategory() == ProductCategory.ACCESSORY)
                 .collect(Collectors.toList());
+        
+        logger.info("📦 Produkty po kategoriach - Dachówki: {}, Rynny: {}, Akcesoria: {}", 
+            allTiles.size(), allGutters.size(), allAccessories.size());
         
         // Podziel produkty na główne i opcjonalne
         // Dla Dachówek i Rynien: tylko produkty oznaczone jako "Główna" (true) lub "Opcjonalna" (false)
@@ -136,6 +143,8 @@ public class OfferPdfService {
                 .collect(Collectors.toList());
         
         long tilesWithoutOption = allTiles.stream().filter(p -> p.getIsMainOption() == null || p.getIsMainOption() == GroupOption.NONE).count();
+        logger.info("📦 Dachówki - Główne: {}, Opcjonalne: {}, Bez opcji: {}", 
+            mainTiles.size(), optionalTiles.size(), tilesWithoutOption);
         
         // Dla Dachówek: połącz główne i opcjonalne (dla tabeli)
         // Jeśli nie ma żadnych produktów z opcją, użyj wszystkich (fallback)
@@ -232,6 +241,7 @@ public class OfferPdfService {
         context.setVariable("windowsPrice", "0.00"); // TODO: Dodać obsługę okien
         
         // Generuj tabele produktów jako HTML
+        logger.info("🔨 Generowanie tabel produktów...");
         String allProductsTable = generateAllProductsTable(allTilesForTable, allGuttersForTable, mainAccessories, new ArrayList<>());
         
         // Tabele dla wszystkich produktów (główne + opcjonalne)
@@ -241,6 +251,8 @@ public class OfferPdfService {
         String windowsTable = "<p>Brak okien w ofercie</p>"; // TODO: Dodać obsługę okien
         
         // Tabele dla produktów głównych (tylko isMainOption = MAIN)
+        logger.info("🔨 Generowanie tabel głównych - mainTiles: {} produktów, mainGutters: {} produktów", 
+            mainTiles.size(), mainGutters.size());
         String tilesMainTable = generateCategoryTable(mainTiles, "Dachówki - Główne");
         String guttersMainTable = generateCategoryTable(mainGutters, "Rynny - Główne");
         String windowsMainTable = "<p>Brak okien głównych w ofercie</p>"; // TODO: Dodać obsługę okien
@@ -263,6 +275,8 @@ public class OfferPdfService {
         }
         
         // Tabele dla produktów opcjonalnych (tylko isMainOption = OPTIONAL) - TYLKO SUMY dla każdej grupy
+        logger.info("🔨 Generowanie tabel opcjonalnych - optionalTiles: {} produktów, optionalGutters: {} produktów", 
+            optionalTiles.size(), optionalGutters.size());
         String tilesOptionalTable = generateOptionalGroupsSummaryTable(optionalTiles, "Dachówki");
         String guttersOptionalTable = generateOptionalGroupsSummaryTable(optionalGutters, "Rynny");
         String windowsOptionalTable = "<p>Brak okien opcjonalnych w ofercie</p>"; // TODO: Dodać obsługę okien

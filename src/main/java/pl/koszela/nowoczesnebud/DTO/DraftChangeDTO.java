@@ -1,5 +1,7 @@
 package pl.koszela.nowoczesnebud.DTO;
 
+import pl.koszela.nowoczesnebud.Model.GroupOption;
+
 public class DraftChangeDTO {
     
     private Long productId;
@@ -15,7 +17,7 @@ public class DraftChangeDTO {
     
     // Opcja dla grupy produktowej (draft)
     // ⚠️ WAŻNE: manufacturer i groupName są pobierane z Product przez productId
-    private Boolean draftIsMainOption; // Czy grupa jest "Główna" (true) czy "Opcjonalna" (false) lub null
+    private GroupOption draftIsMainOption; // MAIN=Główna, OPTIONAL=Opcjonalna, NONE=Nie wybrano
     
     // Constructors
     public DraftChangeDTO() {}
@@ -106,11 +108,11 @@ public class DraftChangeDTO {
         this.priceChangeSource = priceChangeSource;
     }
     
-    public Boolean getDraftIsMainOption() {
+    public GroupOption getDraftIsMainOption() {
         return draftIsMainOption;
     }
     
-    public void setDraftIsMainOption(Boolean draftIsMainOption) {
+    public void setDraftIsMainOption(GroupOption draftIsMainOption) {
         this.draftIsMainOption = draftIsMainOption;
     }
 }

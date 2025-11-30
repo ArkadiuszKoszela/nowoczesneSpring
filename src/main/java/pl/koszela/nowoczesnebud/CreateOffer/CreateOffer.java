@@ -82,28 +82,28 @@ public class CreateOffer {
 
             // Podziel produkty na główne i opcjonalne
             // ⚠️ WAŻNE: Tylko produkty z isMainOption == true (Główna) lub isMainOption == false (Opcjonalna)
-            // Produkty z isMainOption == null (Nie wybrano) są POMIJANE i NIE trafiają do PDF!
+            // Produkty z isMainOption == NONE (Nie wybrano) są POMIJANE i NIE trafiają do PDF!
             List<Product> mainTiles = allTiles.stream()
-                    .filter(p -> p.getIsMainOption() != null && p.getIsMainOption() == true)
+                    .filter(p -> p.getIsMainOption() != null && p.getIsMainOption() == GroupOption.MAIN)
                     .collect(Collectors.toList());
             List<Product> optionalTiles = allTiles.stream()
-                    .filter(p -> p.getIsMainOption() != null && p.getIsMainOption() == false)
+                    .filter(p -> p.getIsMainOption() != null && p.getIsMainOption() == GroupOption.OPTIONAL)
                     .collect(Collectors.toList());
             
-            // Rynny i akcesoria - tylko te które są oznaczone jako główne (true) lub opcjonalne (false)
-            // null = Nie wybrano - pomijamy!
+            // Rynny i akcesoria - tylko te które są oznaczone jako główne (MAIN) lub opcjonalne (OPTIONAL)
+            // NONE = Nie wybrano - pomijamy!
             List<Product> mainGutters = allGutters.stream()
-                    .filter(p -> p.getIsMainOption() != null && p.getIsMainOption() == true)
+                    .filter(p -> p.getIsMainOption() != null && p.getIsMainOption() == GroupOption.MAIN)
                     .collect(Collectors.toList());
             List<Product> optionalGutters = allGutters.stream()
-                    .filter(p -> p.getIsMainOption() != null && p.getIsMainOption() == false)
+                    .filter(p -> p.getIsMainOption() != null && p.getIsMainOption() == GroupOption.OPTIONAL)
                     .collect(Collectors.toList());
             
             List<Product> mainAccessories = allAccessories.stream()
-                    .filter(p -> p.getIsMainOption() != null && p.getIsMainOption() == true)
+                    .filter(p -> p.getIsMainOption() != null && p.getIsMainOption() == GroupOption.MAIN)
                     .collect(Collectors.toList());
             List<Product> optionalAccessories = allAccessories.stream()
-                    .filter(p -> p.getIsMainOption() != null && p.getIsMainOption() == false)
+                    .filter(p -> p.getIsMainOption() != null && p.getIsMainOption() == GroupOption.OPTIONAL)
                     .collect(Collectors.toList());
 
             // Sprawdź czy mamy jakiekolwiek Input oznaczone jako główne lub opcjonalne

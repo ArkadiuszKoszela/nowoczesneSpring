@@ -232,6 +232,7 @@ public class OfferPdfService {
         context.setVariable("windowsPrice", "0.00"); // TODO: Dodać obsługę okien
         
         // Generuj tabele produktów jako HTML
+        logger.info("🔨 Generowanie tabel produktów...");
         String allProductsTable = generateAllProductsTable(allTilesForTable, allGuttersForTable, mainAccessories, new ArrayList<>());
         
         // Tabele dla wszystkich produktów (główne + opcjonalne)
@@ -241,6 +242,8 @@ public class OfferPdfService {
         String windowsTable = "<p>Brak okien w ofercie</p>"; // TODO: Dodać obsługę okien
         
         // Tabele dla produktów głównych (tylko isMainOption = MAIN)
+        logger.info("🔨 Generowanie tabel głównych - mainTiles: {} produktów, mainGutters: {} produktów", 
+            mainTiles.size(), mainGutters.size());
         String tilesMainTable = generateCategoryTable(mainTiles, "Dachówki - Główne");
         String guttersMainTable = generateCategoryTable(mainGutters, "Rynny - Główne");
         String windowsMainTable = "<p>Brak okien głównych w ofercie</p>"; // TODO: Dodać obsługę okien
@@ -263,6 +266,8 @@ public class OfferPdfService {
         }
         
         // Tabele dla produktów opcjonalnych (tylko isMainOption = OPTIONAL) - TYLKO SUMY dla każdej grupy
+        logger.info("🔨 Generowanie tabel opcjonalnych - optionalTiles: {} produktów, optionalGutters: {} produktów", 
+            optionalTiles.size(), optionalGutters.size());
         String tilesOptionalTable = generateOptionalGroupsSummaryTable(optionalTiles, "Dachówki");
         String guttersOptionalTable = generateOptionalGroupsSummaryTable(optionalGutters, "Rynny");
         String windowsOptionalTable = "<p>Brak okien opcjonalnych w ofercie</p>"; // TODO: Dodać obsługę okien

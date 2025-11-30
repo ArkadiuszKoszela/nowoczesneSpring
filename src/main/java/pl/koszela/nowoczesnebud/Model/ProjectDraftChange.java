@@ -51,8 +51,9 @@ public class ProjectDraftChange {
     
     // Opcja dla grupy produktowej (draft)
     // ⚠️ WAŻNE: manufacturer i groupName są pobierane z Product przez productId
-    @Column(name = "draft_is_main_option")
-    private Boolean draftIsMainOption; // Czy grupa jest "Główna" (true) czy "Opcjonalna" (false) lub null
+    @Convert(converter = GroupOptionConverter.class)
+    @Column(name = "draft_is_main_option", length = 20)
+    private GroupOption draftIsMainOption; // MAIN, OPTIONAL, lub NONE (domyślnie)
     
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -163,11 +164,11 @@ public class ProjectDraftChange {
         this.priceChangeSource = priceChangeSource;
     }
     
-    public Boolean getDraftIsMainOption() {
+    public GroupOption getDraftIsMainOption() {
         return draftIsMainOption;
     }
     
-    public void setDraftIsMainOption(Boolean draftIsMainOption) {
+    public void setDraftIsMainOption(GroupOption draftIsMainOption) {
         this.draftIsMainOption = draftIsMainOption;
     }
     

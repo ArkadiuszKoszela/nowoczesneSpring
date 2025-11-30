@@ -3,6 +3,7 @@ package pl.koszela.nowoczesnebud.DTO;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import pl.koszela.nowoczesnebud.Model.GroupOption;
 import pl.koszela.nowoczesnebud.Model.ProductCategory;
 
 /**
@@ -16,6 +17,6 @@ public class SaveProjectProductGroupDTO {
     private ProductCategory category;
     private String manufacturer;
     private String groupName;
-    private Boolean isMainOption; // true=Główna, false=Opcjonalna
+    private GroupOption isMainOption; // MAIN=Główna, OPTIONAL=Opcjonalna, NONE=Nie wybrano
 }
 

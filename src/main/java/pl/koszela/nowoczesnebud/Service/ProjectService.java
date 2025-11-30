@@ -455,7 +455,7 @@ public class ProjectService {
             // ⚠️ WAŻNE: Obsługuj productId = 0 (z importu) - wtedy szukaj produktów po manufacturer i groupName
             Map<String, ProjectDraftChange> groupOptionsMap = new java.util.HashMap<>();
             for (ProjectDraftChange draft : allDraftChanges) {
-                if (draft.getDraftIsMainOption() != null) {
+                if (draft.getDraftIsMainOption() != null && draft.getDraftIsMainOption() != GroupOption.NONE) {
                     String groupKey = null;
                     String manufacturer = null;
                     String groupName = null;
@@ -754,7 +754,8 @@ public class ProjectService {
         // 3a. Pobierz opcje grup z ProjectProductGroup (zapisane opcje)
         List<ProjectProductGroup> productGroups = projectProductGroupRepository.findByProjectIdAndCategory(projectId, category);
         // ⚠️ WAŻNE: Mapuj opcje grup po manufacturer + groupName (klucz: "manufacturer_groupName")
-        Map<String, Boolean> savedGroupOptionsMap = productGroups.stream()
+        Map<String, GroupOption> savedGroupOptionsMap = productGroups.stream()
+            .filter(ppg -> ppg.getIsMainOption() != null && ppg.getIsMainOption() != GroupOption.NONE)
             .collect(Collectors.toMap(
                 ppg -> ppg.getManufacturer() + "_" + ppg.getGroupName(),
                 ProjectProductGroup::getIsMainOption,
@@ -858,10 +859,10 @@ public class ProjectService {
             // ⚠️ WAŻNE: Ustaw isMainOption z priorytetami:
             // 1. draftIsMainOption z draft changes (najwyższy priorytet - tymczasowe, niezapisane)
             //    - Jeśli draft istnieje i wszystkie inne pola są null, to to jest tylko aktualizacja opcji grupy
-            //    - W takim przypadku użyj draftIsMainOption (może być null - "Nie wybrano")
+            //    - W takim przypadku użyj draftIsMainOption (może być NONE - "Nie wybrano")
             // 2. isMainOption z ProjectProductGroup (zapisane opcje)
-            // 3. null (domyślnie - "Nie wybrano")
-            Boolean isMainOption = null;
+            // 3. NONE (domyślnie - "Nie wybrano")
+            GroupOption isMainOption = GroupOption.NONE;
             if (draft != null) {
                 // Sprawdź, czy to jest tylko aktualizacja opcji grupy (wszystkie inne pola są null)
                 boolean isOnlyGroupOptionUpdate = draft.getDraftRetailPrice() == null && 
@@ -873,18 +874,21 @@ public class ProjectService {
                                                   draft.getDraftDiscountPercent() == null;
                 
                 if (isOnlyGroupOptionUpdate) {
-                    // To jest tylko aktualizacja opcji grupy - użyj draftIsMainOption (może być null - "Nie wybrano")
-                    isMainOption = draft.getDraftIsMainOption();
-                } else if (draft.getDraftIsMainOption() != null) {
-                    // Jeśli są inne pola, użyj draftIsMainOption tylko jeśli nie jest null
+                    // To jest tylko aktualizacja opcji grupy - użyj draftIsMainOption (może być NONE - "Nie wybrano")
+                    isMainOption = draft.getDraftIsMainOption() != null ? draft.getDraftIsMainOption() : GroupOption.NONE;
+                } else if (draft.getDraftIsMainOption() != null && draft.getDraftIsMainOption() != GroupOption.NONE) {
+                    // Jeśli są inne pola, użyj draftIsMainOption tylko jeśli nie jest NONE
                     isMainOption = draft.getDraftIsMainOption();
                 }
             }
             
             // Priorytet 2: ProjectProductGroup (tylko jeśli nie ma draft changes z opcjami grup)
-            if (isMainOption == null && current.getManufacturer() != null && current.getGroupName() != null) {
+            if (isMainOption == GroupOption.NONE && current.getManufacturer() != null && current.getGroupName() != null) {
                 String groupKey = current.getManufacturer() + "_" + current.getGroupName();
-                isMainOption = savedGroupOptionsMap.get(groupKey);
+                GroupOption savedOption = savedGroupOptionsMap.get(groupKey);
+                if (savedOption != null) {
+                    isMainOption = savedOption;
+                }
             }
             
             dto.setIsMainOption(isMainOption);

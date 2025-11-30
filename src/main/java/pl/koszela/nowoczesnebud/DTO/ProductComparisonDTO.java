@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import pl.koszela.nowoczesnebud.Model.DiscountCalculationMethod;
+import pl.koszela.nowoczesnebud.Model.GroupOption;
 import pl.koszela.nowoczesnebud.Model.PriceChangeSource;
 import pl.koszela.nowoczesnebud.Model.ProductCategory;
 
@@ -67,8 +68,8 @@ public class ProductComparisonDTO {
     private Double categoryDraftDiscountPercent;   // Tymczasowy rabat % dla całej kategorii
     
     // ========== OPCJA DLA GRUPY PRODUKTOWEJ ==========
-    // ⚠️ WAŻNE: Priorytet: draftIsMainOption (z draft changes) > isMainOption (z ProjectProductGroup) > null
-    private Boolean isMainOption;  // true=Główna, false=Opcjonalna, null=Nie wybrano
+    // ⚠️ WAŻNE: Priorytet: draftIsMainOption (z draft changes) > isMainOption (z ProjectProductGroup) > NONE
+    private GroupOption isMainOption;  // MAIN=Główna, OPTIONAL=Opcjonalna, NONE=Nie wybrano
     
     // ========== TYP AKCESORIUM (tylko dla ACCESSORY) ==========
     private String accessoryType;  // STANDARD, PREMIUM, LUX

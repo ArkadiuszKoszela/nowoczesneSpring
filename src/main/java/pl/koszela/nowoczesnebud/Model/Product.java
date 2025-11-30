@@ -90,7 +90,10 @@ public class Product {
     private Double marginPercent = 0.00;
 
     // === OPCJE ===
-    private Boolean isMainOption;
+    // ⚠️ UWAGA: To pole jest tylko przejściowe (transient) - nie jest zapisywane w bazie
+    // Używane do wyświetlania w UI i filtrowania produktów
+    @Transient
+    private GroupOption isMainOption;
 
     // === TIMESTAMPS ===
     @CreationTimestamp

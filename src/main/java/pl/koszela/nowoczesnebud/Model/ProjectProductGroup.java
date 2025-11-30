@@ -62,14 +62,15 @@ public class ProjectProductGroup {
     private String groupName;
     
     /**
-     * Czy grupa jest "Główna" (true) czy "Opcjonalna" (false)
-     * null = nie wybrano opcji
-     * 
-     * Tylko jedna grupa na producenta może być "Główna"
+     * Opcja dla grupy produktowej
+     * MAIN = Główna (tylko jedna grupa w kategorii może być główna)
+     * OPTIONAL = Opcjonalna (może być kilka grup opcjonalnych)
+     * NONE = Nie wybrano (domyślna wartość)
      */
-    @Column(name = "is_main_option")
+    @Convert(converter = GroupOptionConverter.class)
+    @Column(name = "is_main_option", length = 20)
     @JsonProperty
-    private Boolean isMainOption;
+    private GroupOption isMainOption = GroupOption.NONE;
     
     @CreationTimestamp
     @Column(name = "created_at")

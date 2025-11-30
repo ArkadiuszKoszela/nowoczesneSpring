@@ -263,6 +263,8 @@ public class OfferPdfService {
         }
         
         // Tabele dla produktów opcjonalnych (tylko isMainOption = OPTIONAL) - TYLKO SUMY dla każdej grupy
+        logger.info("🔨 Generowanie tabel opcjonalnych - optionalTiles: {} produktów, optionalGutters: {} produktów", 
+            optionalTiles.size(), optionalGutters.size());
         String tilesOptionalTable = generateOptionalGroupsSummaryTable(optionalTiles, "Dachówki");
         String guttersOptionalTable = generateOptionalGroupsSummaryTable(optionalGutters, "Rynny");
         String windowsOptionalTable = "<p>Brak okien opcjonalnych w ofercie</p>"; // TODO: Dodać obsługę okien

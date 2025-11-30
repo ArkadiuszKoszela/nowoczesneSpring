@@ -1,5 +1,6 @@
 package pl.koszela.nowoczesnebud.DTO;
 
+import pl.koszela.nowoczesnebud.Model.GroupOption;
 import pl.koszela.nowoczesnebud.Model.ProductCategory;
 
 import javax.validation.constraints.NotBlank;
@@ -19,14 +20,14 @@ public class GroupOptionRequest {
     @NotBlank(message = "Nazwa grupy jest wymagana")
     private String groupName;
     
-    // null = Nie wybrano, true = Główna, false = Opcjonalna
-    private Boolean isMainOption;
+    // MAIN = Główna, OPTIONAL = Opcjonalna, NONE = Nie wybrano
+    private GroupOption isMainOption;
 
     // Constructors
     public GroupOptionRequest() {}
 
     public GroupOptionRequest(ProductCategory category, String manufacturer, 
-                            String groupName, Boolean isMainOption) {
+                            String groupName, GroupOption isMainOption) {
         this.category = category;
         this.manufacturer = manufacturer;
         this.groupName = groupName;
@@ -43,8 +44,8 @@ public class GroupOptionRequest {
     public String getGroupName() { return groupName; }
     public void setGroupName(String groupName) { this.groupName = groupName; }
 
-    public Boolean getIsMainOption() { return isMainOption; }
-    public void setIsMainOption(Boolean isMainOption) { this.isMainOption = isMainOption; }
+    public GroupOption getIsMainOption() { return isMainOption; }
+    public void setIsMainOption(GroupOption isMainOption) { this.isMainOption = isMainOption; }
 
     @Override
     public String toString() {

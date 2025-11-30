@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import pl.koszela.nowoczesnebud.Model.GlobalDiscount;
 import pl.koszela.nowoczesnebud.Model.Input;
+import pl.koszela.nowoczesnebud.Model.GroupOption;
 import pl.koszela.nowoczesnebud.Model.Product;
 import pl.koszela.nowoczesnebud.Model.ProductCategory;
 import pl.koszela.nowoczesnebud.Repository.ProductRepository;
@@ -616,13 +617,13 @@ public class ProductService {
      * @param category Kategoria produktu (TILE, GUTTER, ACCESSORY)
      * @param manufacturer Producent (np. "CANTUS")
      * @param groupName Nazwa grupy (np. "łupek kryszał głaz NOBLESSE")
-     * @param isMainOption true = Główna, false = Opcjonalna, null = Nie wybrano
+     * @param isMainOption MAIN = Główna, OPTIONAL = Opcjonalna, NONE = Nie wybrano
      */
     public List<Product> setGroupOption(
             ProductCategory category,
             String manufacturer,
             String groupName,
-            Boolean isMainOption) {
+            GroupOption isMainOption) {
         
         logger.info("setGroupOption (TYLKO W PAMIĘCI - tworzę kopie):");
         logger.info("  Kategoria: {}", category);
