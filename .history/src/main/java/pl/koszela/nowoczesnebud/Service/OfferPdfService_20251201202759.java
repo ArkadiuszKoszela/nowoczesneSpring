@@ -179,7 +179,7 @@ public class OfferPdfService {
             mainAccessories.size(), optionalAccessories.size(), accessoriesWithoutOption);
         
         // Dla Akcesoriów: połącz główne i opcjonalne (dla tabeli)
-        // Jeśli nie ma żadnych produktów z opcją, użyj wszystkich produktów (fallback)
+        // Jeśli nie ma żadnych produktów z opcją, użyj wszystkich (fallback)
         List<Product> allAccessoriesForTable = new ArrayList<>(mainAccessories);
         allAccessoriesForTable.addAll(optionalAccessories);
         if (allAccessoriesForTable.isEmpty() && !allAccessories.isEmpty()) {
@@ -286,12 +286,10 @@ public class OfferPdfService {
             accessoriesMainTable = "<p style=\"color: #999; font-style: italic;\">Brak akcesoriów głównych w ofercie</p>";
         }
         
-        // Tabele dla produktów opcjonalnych (tylko isMainOption = OPTIONAL)
-        // Dla Dachówek i Rynien: TYLKO SUMY dla każdej grupy (generateOptionalGroupsSummaryTable)
-        // Dla Akcesoriów: pełna tabela produktów (generateCategoryTable) - akcesoria są produktami indywidualnymi, nie grupami
+        // Tabele dla produktów opcjonalnych (tylko isMainOption = OPTIONAL) - TYLKO SUMY dla każdej grupy
         String tilesOptionalTable = generateOptionalGroupsSummaryTable(optionalTiles, "Dachówki");
         String guttersOptionalTable = generateOptionalGroupsSummaryTable(optionalGutters, "Rynny");
-        String accessoriesOptionalTable = generateCategoryTable(optionalAccessories, "Akcesoria - Opcjonalne");
+        String accessoriesOptionalTable = generateOptionalGroupsSummaryTable(optionalAccessories, "Akcesoria");
         String windowsOptionalTable = "<p>Brak okien opcjonalnych w ofercie</p>"; // TODO: Dodać obsługę okien
         
         // Jeśli tabela opcjonalna jest pusta, dodaj komunikat
@@ -338,8 +336,6 @@ public class OfferPdfService {
         context.setVariable("windowsMainTable", windowsMainTable);
         context.setVariable("windowsOptionalTable", windowsOptionalTable);
         context.setVariable("accessoriesTable", accessoriesTable);
-        context.setVariable("accessoriesMainTable", accessoriesMainTable);
-        context.setVariable("accessoriesOptionalTable", accessoriesOptionalTable);
         
         // Jeśli szablon ma HTML content, użyj go
         String htmlTemplate = template.getHtmlContent();
@@ -929,16 +925,14 @@ public class OfferPdfService {
         result = replacePlaceholder(result, "windowsTable", getVariableAsString(context, "windowsTable", ""));
         result = replacePlaceholder(result, "accessoriesTable", getVariableAsString(context, "accessoriesTable", ""));
         
-        // Tabele produktów głównych (tylko isMainOption = MAIN)
+        // Tabele produktów głównych (tylko isMainOption = true)
         result = replacePlaceholder(result, "tilesMainTable", getVariableAsString(context, "tilesMainTable", ""));
         result = replacePlaceholder(result, "guttersMainTable", getVariableAsString(context, "guttersMainTable", ""));
-        result = replacePlaceholder(result, "accessoriesMainTable", getVariableAsString(context, "accessoriesMainTable", ""));
         result = replacePlaceholder(result, "windowsMainTable", getVariableAsString(context, "windowsMainTable", ""));
         
-        // Tabele produktów opcjonalnych (tylko isMainOption = OPTIONAL)
+        // Tabele produktów opcjonalnych (tylko isMainOption = false)
         result = replacePlaceholder(result, "tilesOptionalTable", getVariableAsString(context, "tilesOptionalTable", ""));
         result = replacePlaceholder(result, "guttersOptionalTable", getVariableAsString(context, "guttersOptionalTable", ""));
-        result = replacePlaceholder(result, "accessoriesOptionalTable", getVariableAsString(context, "accessoriesOptionalTable", ""));
         result = replacePlaceholder(result, "windowsOptionalTable", getVariableAsString(context, "windowsOptionalTable", ""));
         
         // Ceny - obsługa formatowania liczb

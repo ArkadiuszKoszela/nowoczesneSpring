@@ -167,11 +167,14 @@ public class OfferPdfService {
         }
         
         // Dla Akcesoriów: filtruj po isMainOption (podobnie jak dla Dachówek i Rynien)
+        // ⚠️ WAŻNE: Dla akcesoriów najpierw dzielimy na główne/opcjonalne, potem filtrujemy po quantity > 0
         List<Product> mainAccessories = allAccessories.stream()
                 .filter(p -> p.getIsMainOption() != null && p.getIsMainOption() == GroupOption.MAIN)
+                .filter(p -> p.getQuantity() != null && p.getQuantity() > 0) // Filtruj po quantity dla głównych
                 .collect(Collectors.toList());
         List<Product> optionalAccessories = allAccessories.stream()
                 .filter(p -> p.getIsMainOption() != null && p.getIsMainOption() == GroupOption.OPTIONAL)
+                .filter(p -> p.getQuantity() != null && p.getQuantity() > 0) // Filtruj po quantity dla opcjonalnych
                 .collect(Collectors.toList());
         
         long accessoriesWithoutOption = allAccessories.stream().filter(p -> p.getIsMainOption() == null || p.getIsMainOption() == GroupOption.NONE).count();
@@ -179,12 +182,14 @@ public class OfferPdfService {
             mainAccessories.size(), optionalAccessories.size(), accessoriesWithoutOption);
         
         // Dla Akcesoriów: połącz główne i opcjonalne (dla tabeli)
-        // Jeśli nie ma żadnych produktów z opcją, użyj wszystkich produktów (fallback)
+        // Jeśli nie ma żadnych produktów z opcją, użyj wszystkich produktów z quantity > 0 (fallback)
         List<Product> allAccessoriesForTable = new ArrayList<>(mainAccessories);
         allAccessoriesForTable.addAll(optionalAccessories);
         if (allAccessoriesForTable.isEmpty() && !allAccessories.isEmpty()) {
-            logger.warn("⚠️ Brak akcesoriów z opcją (Główna/Opcjonalna) - używam wszystkich akcesoriów jako fallback");
-            allAccessoriesForTable = new ArrayList<>(allAccessories);
+            logger.warn("⚠️ Brak akcesoriów z opcją (Główna/Opcjonalna) - używam wszystkich akcesoriów z quantity > 0 jako fallback");
+            allAccessoriesForTable = allAccessories.stream()
+                    .filter(p -> p.getQuantity() != null && p.getQuantity() > 0)
+                    .collect(Collectors.toList());
         }
         logger.info("📦 Tabele - Dachówki: {}, Rynny: {}, Akcesoria: {}", 
             allTilesForTable.size(), allGuttersForTable.size(), allAccessoriesForTable.size());

@@ -105,12 +105,7 @@ public class OfferPdfService {
         // To zapewnia, że placeholdery w PDF będą pokazywać dokładnie te same dane co tabele w UI
         List<Product> allProducts = getProductsFromProductComparison(project);
         
-        // Filtruj tylko produkty z quantity > 0
-        allProducts = allProducts.stream()
-                .filter(p -> p.getQuantity() != null && p.getQuantity() > 0)
-                .collect(Collectors.toList());
-        
-        // Podziel po kategoriach
+        // Podziel po kategoriach PRZED filtrowaniem po quantity (dla akcesoriów potrzebujemy wszystkich produktów do podziału na główne/opcjonalne)
         List<Product> allTiles = allProducts.stream()
                 .filter(p -> p.getCategory() == ProductCategory.TILE)
                 .collect(Collectors.toList());
@@ -120,6 +115,15 @@ public class OfferPdfService {
         List<Product> allAccessories = allProducts.stream()
                 .filter(p -> p.getCategory() == ProductCategory.ACCESSORY)
                 .collect(Collectors.toList());
+        
+        // Filtruj tylko produkty z quantity > 0 dla Dachówek i Rynien (przed podziałem na główne/opcjonalne)
+        allTiles = allTiles.stream()
+                .filter(p -> p.getQuantity() != null && p.getQuantity() > 0)
+                .collect(Collectors.toList());
+        allGutters = allGutters.stream()
+                .filter(p -> p.getQuantity() != null && p.getQuantity() > 0)
+                .collect(Collectors.toList());
+        // Dla Akcesoriów: NIE filtrujemy po quantity tutaj - najpierw podzielimy na główne/opcjonalne, potem przefiltrujemy
         
         // Podziel produkty na główne i opcjonalne
         // Dla Dachówek i Rynien: tylko produkty oznaczone jako "Główna" (true) lub "Opcjonalna" (false)
@@ -167,11 +171,14 @@ public class OfferPdfService {
         }
         
         // Dla Akcesoriów: filtruj po isMainOption (podobnie jak dla Dachówek i Rynien)
+        // ⚠️ WAŻNE: Dla akcesoriów najpierw dzielimy na główne/opcjonalne, potem filtrujemy po quantity > 0
         List<Product> mainAccessories = allAccessories.stream()
                 .filter(p -> p.getIsMainOption() != null && p.getIsMainOption() == GroupOption.MAIN)
+                .filter(p -> p.getQuantity() != null && p.getQuantity() > 0) // Filtruj po quantity dla głównych
                 .collect(Collectors.toList());
         List<Product> optionalAccessories = allAccessories.stream()
                 .filter(p -> p.getIsMainOption() != null && p.getIsMainOption() == GroupOption.OPTIONAL)
+                .filter(p -> p.getQuantity() != null && p.getQuantity() > 0) // Filtruj po quantity dla opcjonalnych
                 .collect(Collectors.toList());
         
         long accessoriesWithoutOption = allAccessories.stream().filter(p -> p.getIsMainOption() == null || p.getIsMainOption() == GroupOption.NONE).count();
@@ -179,12 +186,14 @@ public class OfferPdfService {
             mainAccessories.size(), optionalAccessories.size(), accessoriesWithoutOption);
         
         // Dla Akcesoriów: połącz główne i opcjonalne (dla tabeli)
-        // Jeśli nie ma żadnych produktów z opcją, użyj wszystkich produktów (fallback)
+        // Jeśli nie ma żadnych produktów z opcją, użyj wszystkich produktów z quantity > 0 (fallback)
         List<Product> allAccessoriesForTable = new ArrayList<>(mainAccessories);
         allAccessoriesForTable.addAll(optionalAccessories);
         if (allAccessoriesForTable.isEmpty() && !allAccessories.isEmpty()) {
-            logger.warn("⚠️ Brak akcesoriów z opcją (Główna/Opcjonalna) - używam wszystkich akcesoriów jako fallback");
-            allAccessoriesForTable = new ArrayList<>(allAccessories);
+            logger.warn("⚠️ Brak akcesoriów z opcją (Główna/Opcjonalna) - używam wszystkich akcesoriów z quantity > 0 jako fallback");
+            allAccessoriesForTable = allAccessories.stream()
+                    .filter(p -> p.getQuantity() != null && p.getQuantity() > 0)
+                    .collect(Collectors.toList());
         }
         logger.info("📦 Tabele - Dachówki: {}, Rynny: {}, Akcesoria: {}", 
             allTilesForTable.size(), allGuttersForTable.size(), allAccessoriesForTable.size());

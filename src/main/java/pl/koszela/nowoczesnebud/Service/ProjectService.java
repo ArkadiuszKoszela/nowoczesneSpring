@@ -787,7 +787,14 @@ public class ProjectService {
             // Aktualne ceny z cennika
             dto.setCurrentRetailPrice(current.getRetailPrice());
             dto.setCurrentPurchasePrice(current.getPurchasePrice());
-            dto.setCurrentSellingPrice(current.getSellingPrice());
+            
+            // ⚠️ WAŻNE: Dla Akcesoriów, jeśli currentSellingPrice jest null, użyj currentPurchasePrice jako domyślnej
+            // To zapewni, że zysk będzie poprawny (0 zamiast ujemnego)
+            if (category == ProductCategory.ACCESSORY && current.getSellingPrice() == null) {
+                dto.setCurrentSellingPrice(current.getPurchasePrice());
+            } else {
+                dto.setCurrentSellingPrice(current.getSellingPrice());
+            }
             
             // Rabat z cennika
             dto.setDiscount(current.getDiscount());

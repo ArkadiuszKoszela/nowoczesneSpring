@@ -179,7 +179,7 @@ public class OfferPdfService {
             mainAccessories.size(), optionalAccessories.size(), accessoriesWithoutOption);
         
         // Dla Akcesoriów: połącz główne i opcjonalne (dla tabeli)
-        // Jeśli nie ma żadnych produktów z opcją, użyj wszystkich produktów (fallback)
+        // Jeśli nie ma żadnych produktów z opcją, użyj wszystkich (fallback)
         List<Product> allAccessoriesForTable = new ArrayList<>(mainAccessories);
         allAccessoriesForTable.addAll(optionalAccessories);
         if (allAccessoriesForTable.isEmpty() && !allAccessories.isEmpty()) {
@@ -286,12 +286,10 @@ public class OfferPdfService {
             accessoriesMainTable = "<p style=\"color: #999; font-style: italic;\">Brak akcesoriów głównych w ofercie</p>";
         }
         
-        // Tabele dla produktów opcjonalnych (tylko isMainOption = OPTIONAL)
-        // Dla Dachówek i Rynien: TYLKO SUMY dla każdej grupy (generateOptionalGroupsSummaryTable)
-        // Dla Akcesoriów: pełna tabela produktów (generateCategoryTable) - akcesoria są produktami indywidualnymi, nie grupami
+        // Tabele dla produktów opcjonalnych (tylko isMainOption = OPTIONAL) - TYLKO SUMY dla każdej grupy
         String tilesOptionalTable = generateOptionalGroupsSummaryTable(optionalTiles, "Dachówki");
         String guttersOptionalTable = generateOptionalGroupsSummaryTable(optionalGutters, "Rynny");
-        String accessoriesOptionalTable = generateCategoryTable(optionalAccessories, "Akcesoria - Opcjonalne");
+        String accessoriesOptionalTable = generateOptionalGroupsSummaryTable(optionalAccessories, "Akcesoria");
         String windowsOptionalTable = "<p>Brak okien opcjonalnych w ofercie</p>"; // TODO: Dodać obsługę okien
         
         // Jeśli tabela opcjonalna jest pusta, dodaj komunikat

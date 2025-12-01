@@ -179,7 +179,7 @@ public class OfferPdfService {
             mainAccessories.size(), optionalAccessories.size(), accessoriesWithoutOption);
         
         // Dla Akcesoriów: połącz główne i opcjonalne (dla tabeli)
-        // Jeśli nie ma żadnych produktów z opcją, użyj wszystkich produktów (fallback)
+        // Jeśli nie ma żadnych produktów z opcją, użyj wszystkich (fallback)
         List<Product> allAccessoriesForTable = new ArrayList<>(mainAccessories);
         allAccessoriesForTable.addAll(optionalAccessories);
         if (allAccessoriesForTable.isEmpty() && !allAccessories.isEmpty()) {

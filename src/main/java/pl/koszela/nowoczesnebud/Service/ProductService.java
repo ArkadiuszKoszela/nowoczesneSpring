@@ -369,9 +369,10 @@ public class ProductService {
                         continue;
                     }
                     
-                    // Sprawdź czy quantity > 0
-                    if (input.getQuantity() <= 0) {
-                        logger.warn("  ⚠️ Pomijam - quantity <= 0 dla input: {} (quantity={})", input.getMapperName(), input.getQuantity());
+                    // ⚠️ ZMIANA: Pozwalamy na quantity = 0 (użytkownik chce przeliczać nawet dla wartości 0)
+                    // Jeśli quantity < 0, pomijamy (tylko ujemne wartości są nieprawidłowe)
+                    if (input.getQuantity() < 0) {
+                        logger.warn("  ⚠️ Pomijam - quantity < 0 dla input: {} (quantity={})", input.getMapperName(), input.getQuantity());
                         continue;
                     }
                     
