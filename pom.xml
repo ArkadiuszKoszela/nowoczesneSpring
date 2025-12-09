@@ -88,14 +88,11 @@
             <artifactId>spring-boot-starter-thymeleaf</artifactId>
         </dependency>
         <!-- Flyway - automatyczne migracje bazy danych przy starcie aplikacji -->
+        <!-- Uwaga: Flyway 8.x Community Edition nie obsługuje MySQL 5.7 -->
+        <!-- Dla produkcji Flyway jest wyłączone (używamy Hibernate ddl-auto=update) -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
-        </dependency>
-        <!-- Flyway MySQL - wymagane dla MySQL 5.7 w Flyway 8.x -->
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-mysql</artifactId>
         </dependency>
         <!-- Flyway MySQL - obsługa MySQL 5.7 -->
         <dependency>
