@@ -122,7 +122,7 @@ public class ProductController {
      * GET /api/products/group-attributes?category=TILE&manufacturer=CANTUS&groupName=Nuance
      * 
      * Zwraca: {"attributes": "{\"kolor\":[\"czerwony\"],\"kształt\":[\"płaska\"]}"}
-     * lub 404 jeśli grupa nie ma atrybutów
+     * lub {"attributes": null} jeśli grupa nie ma atrybutów (200 OK z pustym obiektem, nie 404)
      */
     @GetMapping("/group-attributes")
     public ResponseEntity<Map<String, String>> getGroupAttributes(
@@ -134,13 +134,16 @@ public class ProductController {
         
         try {
             String attributes = productService.getGroupAttributes(category, manufacturer, groupName);
+            Map<String, String> response = new HashMap<>();
+            
             if (attributes != null) {
-                Map<String, String> response = new HashMap<>();
                 response.put("attributes", attributes);
-                return ResponseEntity.ok(response);
             } else {
-                return ResponseEntity.notFound().build();
+                // Zwróć 200 OK z null zamiast 404 - brak atrybutów to normalny stan
+                response.put("attributes", null);
             }
+            
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             logger.error("Błąd podczas pobierania atrybutów dla grupy: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -226,13 +229,15 @@ public class ProductController {
     public ResponseEntity<List<Product>> fillQuantities(
             @RequestBody List<Input> inputList,
             @RequestParam ProductCategory category) {
-        
-        logger.info("fillQuantities - kategoria: {}", category);
-        logger.debug("Otrzymano inputów: {}", inputList.size());
+        // ⏱️ PERFORMANCE LOG: Start kontrolera "Przelicz produkty"
+        long startTime = System.currentTimeMillis();
+        logger.info("⏱️ [Przelicz produkty] POST /fill-quantities - START (kategoria: {}, inputów: {})", category, inputList.size());
         
         List<Product> products = productService.fillProductQuantities(inputList, category);
         
-        logger.info("Zwracam {} produktów", products.size());
+        long endTime = System.currentTimeMillis();
+        long duration = endTime - startTime;
+        logger.info("⏱️ [Przelicz produkty] POST /fill-quantities - END: {} produktów w {}ms", products.size(), duration);
         return ResponseEntity.ok(products);
     }
 

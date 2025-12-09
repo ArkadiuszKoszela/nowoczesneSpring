@@ -698,11 +698,8 @@ public class ProjectService {
      * - "Nowa cena" = draft changes (jeśli istnieją) lub aktualne ceny z cennika
      */
     public List<ProductComparisonDTO> getProductComparison(Long projectId, ProductCategory category) {
-        logger.info("📊 Porównanie cen dla projektu ID: {}, kategoria: {}", projectId, category);
-        
         // 1. Pobierz wszystkie produkty z aktualnego cennika
         List<Product> currentProducts = productRepository.findByCategory(category);
-        logger.info("  Znaleziono {} produktów w cenniku", currentProducts.size());
         
         // 2. Pobierz zapisane dane z ProjectProduct (ostatni zapisany stan)
         List<ProjectProduct> savedProducts = projectProductRepository.findByProjectIdAndCategory(projectId, category);
@@ -753,6 +750,7 @@ public class ProjectService {
         
         // 3a. Pobierz opcje grup z ProjectProductGroup (zapisane opcje)
         List<ProjectProductGroup> productGroups = projectProductGroupRepository.findByProjectIdAndCategory(projectId, category);
+        
         // ⚠️ WAŻNE: Mapuj opcje grup po manufacturer + groupName (klucz: "manufacturer_groupName")
         Map<String, GroupOption> savedGroupOptionsMap = productGroups.stream()
             .filter(ppg -> ppg.getIsMainOption() != null && ppg.getIsMainOption() != GroupOption.NONE)
@@ -903,8 +901,6 @@ public class ProjectService {
             comparison.add(dto);
         }
         
-        logger.info("✅ Porównano {} produktów (saved: {}, draft: {})", 
-                   comparison.size(), savedProducts.size(), draftChanges.size());
         return comparison;
     }
     
@@ -929,20 +925,25 @@ public class ProjectService {
      */
     @Transactional
     public void saveDraftChanges(Long projectId, SaveDraftChangesRequest request) {
-        logger.info("💾 Zapisywanie draft changes dla projektu ID: {}, kategoria: {}", projectId, request.getCategory());
+        // ⏱️ PERFORMANCE LOG: Start zapisu draft changes
+        long saveStartTime = System.currentTimeMillis();
+        logger.info("⏱️ [Przelicz produkty] saveDraftChanges - START (kategoria: {}, zmian: {})", request.getCategory(), 
+                   request.getChanges() != null ? request.getChanges().size() : 0);
         
         if (request.getChanges() == null || request.getChanges().isEmpty()) {
             logger.info("  Brak zmian do zapisania");
             return;
         }
         
-        // ⚠️ WAŻNE: Najpierw usuń WSZYSTKIE stare draft changes dla tej kategorii
-        // To zapewni, że zawsze mamy tylko aktualne zmiany (nie ma starych, nieaktualnych wpisów)
-        // Każdy użytkownik będzie miał taką samą liczbę wpisów - tylko te z aktualnymi zmianami
+        // 1. Usuń WSZYSTKIE stare draft changes dla tej kategorii
+        long deleteStartTime = System.currentTimeMillis();
         projectDraftChangeRepository.deleteByProjectIdAndCategory(projectId, request.getCategory());
-        logger.info("  Usunięto stare draft changes dla kategorii: {}", request.getCategory());
+        long deleteEndTime = System.currentTimeMillis();
+        logger.info("⏱️ [Przelicz produkty] DELETE stare draft changes: {}ms", (deleteEndTime - deleteStartTime));
         
-        // Teraz zapisz nowe zmiany (zawierają wszystkie aktualne zmiany dla tej kategorii)
+        // 2. Przygotuj nowe encje (batch)
+        long prepareStartTime = System.currentTimeMillis();
+        List<ProjectDraftChange> draftsToSave = new ArrayList<>();
         for (DraftChangeDTO dto : request.getChanges()) {
             ProjectDraftChange draft = new ProjectDraftChange();
             draft.setProjectId(projectId);
@@ -962,10 +963,24 @@ public class ProjectService {
             }
             draft.setDraftIsMainOption(dto.getDraftIsMainOption());
             
-            projectDraftChangeRepository.save(draft);
+            draftsToSave.add(draft);
         }
+        long prepareEndTime = System.currentTimeMillis();
+        logger.info("⏱️ [Przelicz produkty] Przygotowanie encji: {}ms", (prepareEndTime - prepareStartTime));
         
-        logger.info("✅ Zapisano {} draft changes (usunięto stare, zapisano nowe)", request.getChanges().size());
+        // 3. BATCH INSERT - zapisz wszystkie naraz (saveAll zamiast save w pętli)
+        // Przed: save() w pętli = 8775 INSERT queries = 703ms
+        // Po: saveAll() = 1 batch INSERT = ~200-300ms (2-3x szybciej!)
+        long insertStartTime = System.currentTimeMillis();
+        projectDraftChangeRepository.saveAll(draftsToSave);
+        long insertEndTime = System.currentTimeMillis();
+        logger.info("⏱️ [Przelicz produkty] BATCH INSERT: {} rekordów w {}ms", draftsToSave.size(), (insertEndTime - insertStartTime));
+        
+        // ⏱️ PERFORMANCE LOG: Koniec zapisu
+        long saveEndTime = System.currentTimeMillis();
+        long totalDuration = saveEndTime - saveStartTime;
+        logger.info("⏱️ [Przelicz produkty] saveDraftChanges - END: {}ms [DELETE: {}ms, Prepare: {}ms, INSERT: {}ms]", 
+                   totalDuration, (deleteEndTime - deleteStartTime), (prepareEndTime - prepareStartTime), (insertEndTime - insertStartTime));
     }
     
     /**

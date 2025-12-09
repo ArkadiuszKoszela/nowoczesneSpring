@@ -162,14 +162,31 @@ public class ProjectController {
     public ResponseEntity<List<pl.koszela.nowoczesnebud.DTO.ProductComparisonDTO>> getProductComparison(
             @PathVariable Long projectId,
             @RequestParam ProductCategory category) {
-        logger.info("📥 Request: GET /api/projects/{}/products-comparison?category={}", projectId, category);
+        long startTime = System.currentTimeMillis();
+        logger.info("📡 [GET /products-comparison] START - project: {}, category: {}", projectId, category);
         
         try {
+            long dbStart = System.currentTimeMillis();
             List<pl.koszela.nowoczesnebud.DTO.ProductComparisonDTO> comparison = 
                 projectService.getProductComparison(projectId, category);
-            return ResponseEntity.ok(comparison);
+            long dbEnd = System.currentTimeMillis();
+            
+            logger.info("   ⏱️ [DB + Business Logic] Czas przetwarzania: {}ms, produktów: {}", 
+                       (dbEnd - dbStart), comparison.size());
+            
+            // ⚠️ Uwaga: ResponseEntity.ok() wyzwala serializację JSON przez Jackson
+            // Czas pomiędzy tym logiem a faktycznym wysłaniem odpowiedzi = czas serializacji JSON + GZIP
+            long beforeReturn = System.currentTimeMillis();
+            ResponseEntity<List<pl.koszela.nowoczesnebud.DTO.ProductComparisonDTO>> response = ResponseEntity.ok(comparison);
+            long afterReturn = System.currentTimeMillis();
+            
+            logger.info("   ⏱️ [ResponseEntity.ok()] Czas budowania response: {}ms", (afterReturn - beforeReturn));
+            logger.info("📡 [GET /products-comparison] END - Całkowity czas: {}ms", (afterReturn - startTime));
+            
+            return response;
         } catch (Exception e) {
-            logger.error("❌ Błąd podczas porównania cen produktów: {}", e.getMessage(), e);
+            logger.error("❌ Błąd podczas pobierania porównania cen dla projektu {}, kategoria {}: {}", 
+                        projectId, category, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }

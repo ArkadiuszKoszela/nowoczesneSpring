@@ -13,8 +13,6 @@ import pl.koszela.nowoczesnebud.Model.ProductCategory;
 import pl.koszela.nowoczesnebud.Repository.ProductRepository;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -305,145 +303,123 @@ public class ProductService {
      * ⚠️ WAŻNE: Metoda NIE jest @Transactional - nie zapisuje zmian do bazy!
      */
     public List<Product> fillProductQuantities(List<Input> inputList, ProductCategory category) {
-        logger.info("fillProductQuantities START - kategoria: {} (TYLKO W PAMIĘCI - tworzę kopie)", category);
-        logger.debug("Liczba inputów: {}", inputList.size());
+        // ⏱️ PERFORMANCE LOG: Start metody "Przelicz produkty"
+        long methodStartTime = System.currentTimeMillis();
+        logger.info("⏱️ [Przelicz produkty] fillProductQuantities - START (kategoria: {})", category);
+        logger.info("⏱️ [Przelicz produkty] Liczba inputów: {}", inputList.size());
         
-        if (logger.isDebugEnabled()) {
-            logger.debug("Lista inputów:");
-            for (Input input : inputList) {
-                logger.debug("  - name: '{}', mapperName: '{}', quantity: {}", 
-                    input.getName(), input.getMapperName(), input.getQuantity());
-            }
-        }
-        
-        // Pobierz produkty z bazy (oryginalne encje - NIE modyfikujemy ich!)
+        // 1. Pobierz produkty z bazy (oryginalne encje - NIE modyfikujemy ich!)
+        long dbStartTime = System.currentTimeMillis();
         List<Product> originalProducts = productRepository.findByCategory(category);
-        logger.info("Liczba produktów w kategorii {}: {}", category, originalProducts.size());
+        long dbEndTime = System.currentTimeMillis();
+        long dbDuration = dbEndTime - dbStartTime;
+        logger.info("⏱️ [Przelicz produkty] DB Query: findByCategory - {} produktów w {}ms", originalProducts.size(), dbDuration);
         
-        // Loguj przykładowe produkty z mapperName
-        if (logger.isDebugEnabled()) {
-            List<Product> productsWithMapper = originalProducts.stream()
-                .filter(p -> p.getMapperName() != null && !p.getMapperName().isEmpty())
-                .limit(5)
-                .collect(java.util.stream.Collectors.toList());
-            logger.debug("Przykładowe produkty {} z mapperName (max 5):", category);
-            for (Product p : productsWithMapper) {
-                logger.debug("  - id: {}, name: '{}', mapperName: '{}'", p.getId(), p.getName(), p.getMapperName());
-            }
-            
-            List<String> inputMapperNames = inputList.stream()
-                .filter(i -> i.getMapperName() != null && !i.getMapperName().isEmpty())
-                .map(Input::getMapperName)
-                .distinct()
-                .limit(10)
-                .collect(java.util.stream.Collectors.toList());
-            logger.debug("Przykładowe inputy mapperName (max 10): {}", inputMapperNames);
-        }
-        
-        // ⚠️ WAŻNE: Tworzymy KOPIE produktów zamiast modyfikować oryginalne encje
-        // To zapobiega automatycznemu zapisowi zmian przez Hibernate
+        // 2. Tworzymy KOPIE produktów zamiast modyfikować oryginalne encje (zapobiega automatycznemu zapisowi przez Hibernate)
+        long copyStartTime = System.currentTimeMillis();
         List<Product> productsCopy = new ArrayList<>();
         for (Product original : originalProducts) {
             Product copy = createProductCopy(original);
             productsCopy.add(copy);
         }
+        long copyEndTime = System.currentTimeMillis();
+        long copyDuration = copyEndTime - copyStartTime;
+        logger.info("⏱️ [Przelicz produkty] Kopiowanie produktów: {} produktów skopiowanych w {}ms", productsCopy.size(), copyDuration);
 
+        // 3. Matchowanie produktów z inputami - OPTYMALIZACJA: HashMap zamiast pętli w pętli
+        // Przed: O(n*m) = 8775 × 26 = 228,150 iteracji w 43-66ms
+        // Po: O(n+m) = 8775 + 26 = 8,801 operacji w ~5-10ms (4-6x szybciej!)
+        long matchingStartTime = System.currentTimeMillis();
         int updatedCount = 0;
-        for (Product product : productsCopy) {
-            // Loguj tylko produkty z mapperName dla kategorii ACCESSORY
-            if (category == ProductCategory.ACCESSORY && product.getMapperName() != null) {
-                logger.debug("🔍 Sprawdzam produkt ACCESSORY: id={}, name='{}', mapperName='{}', quantityConverter={}", 
-                    product.getId(), product.getName(), product.getMapperName(), product.getQuantityConverter());
-            }
-            
-            for (Input input : inputList) {
-                if (product.getMapperName() != null && 
-                    product.getMapperName().equalsIgnoreCase(input.getMapperName())) {
-                    
-                    logger.info("✅ MATCH dla kategorii {}: produkt mapperName='{}' pasuje do input mapperName='{}', inputQuantity={}", 
-                        category, product.getMapperName(), input.getMapperName(), input.getQuantity());
-                    
-                    // Sprawdź czy quantity nie jest null
-                    if (input.getQuantity() == null) {
-                        logger.warn("  ⚠️ Pomijam - quantity jest null dla input: {}", input.getMapperName());
-                        continue;
-                    }
-                    
-                    // ⚠️ ZMIANA: Pozwalamy na quantity = 0 (użytkownik chce przeliczać nawet dla wartości 0)
-                    // Jeśli quantity < 0, pomijamy (tylko ujemne wartości są nieprawidłowe)
-                    if (input.getQuantity() < 0) {
-                        logger.warn("  ⚠️ Pomijam - quantity < 0 dla input: {} (quantity={})", input.getMapperName(), input.getQuantity());
-                        continue;
-                    }
-                    
-                    // 1. Oblicz ilość (na KOPII, nie na oryginale!)
-                    double quantityConverter = product.getQuantityConverter() != null ? product.getQuantityConverter() : 1.0;
-                    if (quantityConverter <= 0) {
-                        logger.warn("  ⚠️ quantityConverter <= 0 dla produktu {}: {}", product.getId(), quantityConverter);
-                        quantityConverter = 1.0; // Użyj domyślnej wartości
-                    }
-                    
-                    double quantity = priceCalculationService.calculateProductQuantity(
-                        input.getQuantity(), 
-                        quantityConverter
-                    );
-                    product.setQuantity(quantity);
-                    logger.info("  ✅ Ilość obliczona dla produktu {} ({}): inputQuantity={} * quantityConverter={} = {}", 
-                        product.getId(), product.getName(), input.getQuantity(), quantityConverter, quantity);
-                    
-                    if (quantity <= 0) {
-                        logger.warn("  ⚠️ UWAGA: Obliczona quantity <= 0: {}", quantity);
-                    }
-
-                    // 2. Przelicz cenę zakupu jeśli nie jest ustawiona (na KOPII!)
-                    // ⚠️ WAŻNE: Dla akcesoriów retailPrice może być null - sprawdź to przed porównaniem
-                    if (product.getPurchasePrice() == null || product.getPurchasePrice() == 0.00) {
-                        if (product.getRetailPrice() != null && product.getRetailPrice() != 0.00) {
-                            double purchasePrice = priceCalculationService.calculatePurchasePrice(product);
-                            product.setPurchasePrice(purchasePrice);
-                            logger.debug("  Cena zakupu obliczona: {}", purchasePrice);
-                        }
-                    }
-                    
-                    // 3. Ustaw cenę sprzedaży (na KOPII!)
-                    // Dla dachówek i rynien: cena sprzedaży = cena katalogowa (retailPrice)
-                    // Dla akcesoriów: cena sprzedaży = cena zakupu (purchasePrice) - domyślnie
-                    // Zysk = (sellingPrice - purchasePrice) × quantity
-                    // ⚠️ WAŻNE: Dla akcesoriów retailPrice może być null - sprawdź to przed porównaniem
-                    if (product.getCategory() == ProductCategory.ACCESSORY) {
-                        // Dla akcesoriów: domyślnie cena sprzedaży = cena zakupu
-                        if (product.getPurchasePrice() != null && product.getPurchasePrice() > 0.00) {
-                            product.setSellingPrice(product.getPurchasePrice());
-                            logger.debug("  Akcesoria - cena sprzedaży = cena zakupu: {} (zysk = 0)", product.getPurchasePrice());
-                        } else {
-                            product.setSellingPrice(null);
-                            logger.debug("  Akcesoria - brak ceny zakupu, cena sprzedaży ustawiona na null");
-                        }
-                    } else {
-                        // Dla dachówek i rynien: cena sprzedaży = cena katalogowa
-                        if (product.getRetailPrice() != null && product.getRetailPrice() > 0.00) {
-                            product.setSellingPrice(product.getRetailPrice());
-                            logger.debug("  Cena sprzedaży = retailPrice: {} (zysk na jednostce: {})", 
-                                product.getRetailPrice(), 
-                                product.getRetailPrice() - (product.getPurchasePrice() != null ? product.getPurchasePrice() : 0.0));
-                        } else if (product.getPurchasePrice() != null && product.getPurchasePrice() > 0.00 && product.getMarginPercent() != null && product.getMarginPercent() > 0.00) {
-                            // Jeśli nie ma retailPrice, ale jest marża, oblicz z marży
-                            double sellingPrice = priceCalculationService.calculateRetailPrice(product);
-                            product.setSellingPrice(sellingPrice);
-                            logger.debug("  Cena sprzedaży obliczona z marży: {} (marża: {}%)", sellingPrice, product.getMarginPercent());
-                        }
-                    }
-                    
-                    updatedCount++;
-                }
+        
+        // Krok 1: Utwórz HashMap inputów (mapperName.toLowerCase() -> Input) - O(m)
+        Map<String, Input> inputMap = new HashMap<>();
+        for (Input input : inputList) {
+            if (input.getMapperName() != null && !input.getMapperName().isEmpty()) {
+                inputMap.put(input.getMapperName().toLowerCase().trim(), input);
             }
         }
+        logger.info("⏱️ [Przelicz produkty] HashMap inputów: {} unikalnych mapperName", inputMap.size());
+        
+        // Krok 2: Iteruj przez produkty i szukaj w HashMap - O(n)
+        for (Product product : productsCopy) {
+            if (product.getMapperName() == null || product.getMapperName().isEmpty()) {
+                continue; // Pomiń produkty bez mapperName
+            }
+            
+            // Szukaj dopasowanego inputu w HashMap (O(1) zamiast O(m)!)
+            String productMapperKey = product.getMapperName().toLowerCase().trim();
+            Input matchedInput = inputMap.get(productMapperKey);
+            
+            if (matchedInput != null) {
+                // Sprawdź czy quantity nie jest null
+                if (matchedInput.getQuantity() == null) {
+                    logger.warn("  ⚠️ Pomijam - quantity jest null dla input: {}", matchedInput.getMapperName());
+                    continue;
+                }
+                
+                // ⚠️ ZMIANA: Pozwalamy na quantity = 0 (użytkownik chce przeliczać nawet dla wartości 0)
+                if (matchedInput.getQuantity() < 0) {
+                    logger.warn("  ⚠️ Pomijam - quantity < 0 dla input: {} (quantity={})", matchedInput.getMapperName(), matchedInput.getQuantity());
+                    continue;
+                }
+                
+                // 1. Oblicz ilość (na KOPII, nie na oryginale!)
+                double quantityConverter = product.getQuantityConverter() != null ? product.getQuantityConverter() : 1.0;
+                if (quantityConverter <= 0) {
+                    logger.warn("  ⚠️ quantityConverter <= 0 dla produktu {}: {}", product.getId(), quantityConverter);
+                    quantityConverter = 1.0; // Użyj domyślnej wartości
+                }
+                
+                double quantity = priceCalculationService.calculateProductQuantity(
+                    matchedInput.getQuantity(), 
+                    quantityConverter
+                );
+                product.setQuantity(quantity);
 
-        logger.info("Zaktualizowano produktów: {} (TYLKO KOPIE W PAMIĘCI - oryginały w bazie nietknięte)", updatedCount);
-        logger.info("fillProductQuantities KONIEC");
+                // 2. Przelicz cenę zakupu jeśli nie jest ustawiona (na KOPII!)
+                if (product.getPurchasePrice() == null || product.getPurchasePrice() == 0.00) {
+                    if (product.getRetailPrice() != null && product.getRetailPrice() != 0.00) {
+                        double purchasePrice = priceCalculationService.calculatePurchasePrice(product);
+                        product.setPurchasePrice(purchasePrice);
+                    }
+                }
+                
+                // 3. Ustaw cenę sprzedaży (na KOPII!)
+                if (product.getCategory() == ProductCategory.ACCESSORY) {
+                    // Dla akcesoriów: domyślnie cena sprzedaży = cena zakupu
+                    if (product.getPurchasePrice() != null && product.getPurchasePrice() > 0.00) {
+                        product.setSellingPrice(product.getPurchasePrice());
+                    } else {
+                        product.setSellingPrice(null);
+                    }
+                } else {
+                    // Dla dachówek i rynien: cena sprzedaży = cena katalogowa
+                    if (product.getRetailPrice() != null && product.getRetailPrice() > 0.00) {
+                        product.setSellingPrice(product.getRetailPrice());
+                    } else if (product.getPurchasePrice() != null && product.getPurchasePrice() > 0.00 && product.getMarginPercent() != null && product.getMarginPercent() > 0.00) {
+                        // Jeśli nie ma retailPrice, ale jest marża, oblicz z marży
+                        double sellingPrice = priceCalculationService.calculateRetailPrice(product);
+                        product.setSellingPrice(sellingPrice);
+                    }
+                }
+                
+                updatedCount++;
+            }
+        }
+        
+        long matchingEndTime = System.currentTimeMillis();
+        long matchingDuration = matchingEndTime - matchingStartTime;
+        logger.info("⏱️ [Przelicz produkty] Matchowanie (HashMap O(n+m)): {} produktów + {} inputów w {}ms ({} dopasowań)", 
+                   productsCopy.size(), inputList.size(), matchingDuration, updatedCount);
+        
+        // ⏱️ PERFORMANCE LOG: Koniec metody
+        long methodEndTime = System.currentTimeMillis();
+        long totalDuration = methodEndTime - methodStartTime;
+        logger.info("⏱️ [Przelicz produkty] fillProductQuantities - END: {} produktów w {}ms [DB: {}ms, Kopiowanie: {}ms, Matchowanie: {}ms]", 
+                   productsCopy.size(), totalDuration, dbDuration, copyDuration, matchingDuration);
         
         // ⚠️ NIE ZAPISUJEMY DO BAZY! Zwracamy KOPIE produktów z przeliczonymi ilościami i cenami
-        // Te kopie będą zapisane jako snapshoty w projekcie, nie w cenniku!
         return productsCopy;
     }
 

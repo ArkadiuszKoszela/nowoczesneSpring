@@ -67,6 +67,18 @@ public class Project {
     private Double guttersDiscount = 0.0;
     
     /**
+     * OKNA - Marża (%)
+     */
+    @Column(name = "windows_margin")
+    private Double windowsMargin = 0.0;
+    
+    /**
+     * OKNA - Rabat indywidualny (%)
+     */
+    @Column(name = "windows_discount")
+    private Double windowsDiscount = 0.0;
+    
+    /**
      * AKCESORIA - Marża (%)
      */
     @Column(name = "accessories_margin")

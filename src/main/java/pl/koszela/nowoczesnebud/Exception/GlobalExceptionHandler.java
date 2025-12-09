@@ -45,10 +45,22 @@ public class GlobalExceptionHandler {
 
     /**
      * Obsługa IOException (np. problemy z plikami)
+     * ⚠️ WAŻNE: Ignoruj ClientAbortException i SocketTimeoutException - to nie są prawdziwe błędy
      */
     @ExceptionHandler(IOException.class)
     public ResponseEntity<ErrorResponse> handleIOException(
             IOException ex, WebRequest request) {
+        
+        // ⚠️ Ignoruj ClientAbortException - klient przerwał połączenie (np. timeout lub zmiana strony)
+        // To jest normalne zachowanie, nie logujemy tego jako błąd
+        String exceptionClass = ex.getClass().getName();
+        if (exceptionClass.contains("ClientAbortException") || 
+            exceptionClass.contains("SocketTimeoutException") ||
+            ex.getMessage() != null && ex.getMessage().contains("SocketTimeoutException")) {
+            // Cicho ignoruj - nie loguj, nie zwracaj błędu
+            logger.debug("ℹ️ Client przerwał połączenie (timeout lub navigacja): {}", exceptionClass);
+            return null; // Nie wysyłaj odpowiedzi (klient już się rozłączył)
+        }
         
         logger.error("❌ IO Exception: {}", ex.getMessage(), ex);
         
