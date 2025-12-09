@@ -23,7 +23,7 @@ public class WebConfig implements WebMvcConfigurer {
                     "http://localhost:4200",
                     "https://angular-nowoczesne-af04d5c56981.herokuapp.com"
                 )
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true)
                 .maxAge(3600); // Cache preflight requests for 1 hour
