@@ -85,13 +85,19 @@ public class OfferTemplateController {
      */
     @PostMapping
     public ResponseEntity<OfferTemplate> createTemplate(@Valid @RequestBody OfferTemplate template) {
-        logger.info("POST /api/offer-templates - tworzenie szablonu: {}", template.getName());
+        logger.info("POST /api/offer-templates - tworzenie szablonu: {}", template != null ? template.getName() : "null");
         
         try {
+            if (template == null) {
+                logger.error("Template jest null");
+                return ResponseEntity.badRequest().build();
+            }
+            
             OfferTemplate saved = templateService.saveTemplate(template);
+            logger.info("Szablon utworzony pomyślnie: ID={}", saved.getId());
             return ResponseEntity.status(HttpStatus.CREATED).body(saved);
         } catch (Exception e) {
-            logger.error("Błąd podczas tworzenia szablonu", e);
+            logger.error("Błąd podczas tworzenia szablonu: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

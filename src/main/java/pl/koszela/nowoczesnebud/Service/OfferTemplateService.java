@@ -65,7 +65,9 @@ public class OfferTemplateService {
         // Jeśli ustawiamy jako domyślny, usuń domyślny status z innych szablonów
         if (template.getIsDefault() != null && template.getIsDefault()) {
             templateRepository.findByIsDefaultTrue().ifPresent(defaultTemplate -> {
-                if (!defaultTemplate.getId().equals(template.getId())) {
+                // Dla nowego szablonu (ID == null) zawsze usuń domyślny status z innych
+                // Dla istniejącego szablonu usuń tylko jeśli to inny szablon
+                if (template.getId() == null || !defaultTemplate.getId().equals(template.getId())) {
                     defaultTemplate.setIsDefault(false);
                     templateRepository.save(defaultTemplate);
                     logger.info("Usunięto domyślny status z szablonu ID: {}", defaultTemplate.getId());
