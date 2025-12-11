@@ -32,14 +32,14 @@ public class OfferTemplate {
      * Przykład: <h1 th:text="${project.client.name}">Nazwa klienta</h1>
      */
     @Lob
-    @Column
+    @Column(columnDefinition = "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
     private String htmlContent;
 
     /**
      * Style CSS dla szablonu
      */
     @Lob
-    @Column
+    @Column(columnDefinition = "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
     private String cssContent;
 
     /**
@@ -47,7 +47,7 @@ public class OfferTemplate {
      * Przechowuje strukturę sekcji, kolory, ustawienia
      */
     @Lob
-    @Column
+    @Column(columnDefinition = "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
     private String jsonConfig;
 
     /**
@@ -61,7 +61,7 @@ public class OfferTemplate {
      * Format: ["data:image/png;base64,iVBORw0KG...", ...]
      */
     @Lob
-    @Column
+    @Column(columnDefinition = "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
     private String imageBase64;
 
     @CreationTimestamp
