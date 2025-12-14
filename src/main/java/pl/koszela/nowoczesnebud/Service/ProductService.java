@@ -155,6 +155,68 @@ public class ProductService {
     }
 
     /**
+     * Sprawdź które kombinacje producent+grupa już istnieją w bazie
+     * ⚠️ WAŻNE: Sprawdzamy tylko manufacturer + groupName (editableGroupName)
+     * "Nazwa produktu w systemie" (editableName) jest używana tylko jako fallback dla groupName,
+     * jeśli groupName[] jest puste. Więc jeśli groupName jest wypełnione, productName nie jest częścią identyfikatora.
+     * 
+     * @param category Kategoria produktów
+     * @param manufacturerGroupPairs Lista trójek (manufacturer, groupName, productName) do sprawdzenia
+     * @return Lista istniejących kombinacji (manufacturer, groupName)
+     */
+    public List<pl.koszela.nowoczesnebud.DTO.CheckExistingGroupsRequest.ManufacturerGroupPair> checkExistingGroups(
+            ProductCategory category,
+            List<pl.koszela.nowoczesnebud.DTO.CheckExistingGroupsRequest.ManufacturerGroupPair> manufacturerGroupPairs) {
+        
+        List<pl.koszela.nowoczesnebud.DTO.CheckExistingGroupsRequest.ManufacturerGroupPair> existing = new ArrayList<>();
+        
+        for (pl.koszela.nowoczesnebud.DTO.CheckExistingGroupsRequest.ManufacturerGroupPair pair : manufacturerGroupPairs) {
+            // Pobierz wszystkie produkty dla danego producenta w kategorii
+            List<Product> products = productRepository.findByCategoryAndManufacturer(category, pair.getManufacturer());
+            
+            // ⚠️ WAŻNE: W backendzie, jeśli groupName[] jest wypełnione, używa go jako finalGroupName
+            // Jeśli groupName[] jest puste, używa name[] (productName) jako fallback dla finalGroupName
+            // Więc sprawdzamy:
+            // 1. Jeśli groupName jest wypełnione -> sprawdzamy manufacturer + groupName
+            // 2. Jeśli groupName jest puste -> sprawdzamy manufacturer + productName (bo productName będzie użyte jako groupName)
+            
+            String groupName = pair.getGroupName() != null ? pair.getGroupName().trim() : "";
+            String productName = pair.getProductName() != null ? pair.getProductName().trim() : "";
+            
+            // ⚠️ WAŻNE: W backendzie, jeśli groupName[] jest wypełnione i różne od name[] (productName),
+            // to używa kombinacji "groupName | productName" jako finalGroupName (zobacz ProductImportService)
+            // Więc sprawdzamy zgodnie z tą logiką:
+            final String finalGroupNameToCheck;
+            if (!groupName.isEmpty() && !productName.isEmpty() && !groupName.equals(productName)) {
+                // Jeśli groupName jest wypełnione i różne od productName, backend użyje kombinacji
+                finalGroupNameToCheck = groupName + " | " + productName;
+            } else if (!groupName.isEmpty()) {
+                // Jeśli groupName jest wypełnione (i takie samo jak productName lub productName jest puste)
+                finalGroupNameToCheck = groupName;
+            } else if (!productName.isEmpty()) {
+                // Jeśli groupName jest puste, użyj productName jako fallback
+                finalGroupNameToCheck = productName;
+            } else {
+                // Oba są puste - nie powinno się zdarzyć (walidacja w frontendzie)
+                finalGroupNameToCheck = "";
+            }
+            
+            // Sprawdź czy istnieje grupa z takim samym manufacturer i finalGroupName
+            boolean exists = false;
+            if (!finalGroupNameToCheck.isEmpty()) {
+                exists = products.stream()
+                        .anyMatch(p -> p.getGroupName() != null && p.getGroupName().equals(finalGroupNameToCheck));
+            }
+            
+            if (exists) {
+                existing.add(pair);
+            }
+        }
+        
+        return existing;
+    }
+
+    /**
      * Pobierz słownik sugestii atrybutów dla autouzupełniania
      * Parsuje attributes JSON ze wszystkich GRUP PRODUKTOWYCH danej kategorii
      * i zbiera unikalne klucze i wartości

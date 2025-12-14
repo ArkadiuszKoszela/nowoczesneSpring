@@ -176,6 +176,36 @@ public class ProductController {
     }
 
     /**
+     * Sprawdź które kombinacje producent+grupa już istnieją w bazie
+     * POST /api/products/check-existing-groups
+     * 
+     * Request Body:
+     * {
+     *   "category": "TILE",
+     *   "pairs": [
+     *     {"manufacturer": "CANTUS", "groupName": "NUANE"},
+     *     {"manufacturer": "BRAAS", "groupName": "FINESSE"}
+     *   ]
+     * }
+     * 
+     * Response: Lista istniejących kombinacji
+     */
+    @PostMapping("/check-existing-groups")
+    public ResponseEntity<List<pl.koszela.nowoczesnebud.DTO.CheckExistingGroupsRequest.ManufacturerGroupPair>> checkExistingGroups(
+            @RequestBody @Valid pl.koszela.nowoczesnebud.DTO.CheckExistingGroupsRequest request) {
+        
+        logger.info("🔍 Sprawdzanie istniejących kombinacji producent+grupa dla kategorii: {}", request.getCategory());
+        
+        List<pl.koszela.nowoczesnebud.DTO.CheckExistingGroupsRequest.ManufacturerGroupPair> existing = 
+            productService.checkExistingGroups(request.getCategory(), request.getPairs());
+        
+        logger.info("✅ Znaleziono {} istniejących kombinacji z {} sprawdzanych", 
+                   existing.size(), request.getPairs().size());
+        
+        return ResponseEntity.ok(existing);
+    }
+
+    /**
      * Import produktów z nazwami, producentami i grupami
      * POST /api/products/import-with-names?category=TILE
      * ZASTĘPUJE: /api/tiles/importWithNames

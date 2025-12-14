@@ -97,11 +97,25 @@ public class ProductImportService {
             // ⚠️ WAŻNE: Frontend zawsze wysyła wartości (editableGroupName)
             // Frontend dba o walidację - wartości nie mogą być puste
             // Używamy BEZPOŚREDNIO wartości z frontendu (z sugestii), bez fallbacku do parsowania z nazwy pliku
+            // ⚠️ NOWA LOGIKA: Jeśli groupName[] jest wypełnione, używamy go jako finalGroupName
+            // Jeśli groupName[] jest puste, używamy name[] (customGroupName) jako fallback dla finalGroupName
+            // ⚠️ WAŻNE: Aby "Nazwa produktu w systemie" była częścią identyfikatora, jeśli użytkownik zmieni
+            // tylko "Nazwa produktu w systemie" (a groupName pozostaje takie samo), to utworzy nowy cennik.
+            // Więc jeśli groupName jest wypełnione, ale różne od customGroupName, to używamy kombinacji
+            // manufacturer + groupName + customGroupName jako identyfikatora grupy.
             String finalGroupName;
             boolean groupFromFrontend = true; // Zawsze z frontendu (walidacja w frontendzie)
             if (customGroupNameFromParam != null && !customGroupNameFromParam.trim().isEmpty()) {
                 // Frontend przesłał wartość w groupName[] - użyj jej BEZPOŚREDNIO (z sugestii)
                 finalGroupName = customGroupNameFromParam.trim();
+                
+                // ⚠️ NOWA LOGIKA: Jeśli customGroupName (name[]) jest różne od customGroupNameFromParam (groupName[]),
+                // to dodajemy customGroupName do finalGroupName, aby "Nazwa produktu w systemie" była częścią identyfikatora
+                if (customGroupName != null && !customGroupName.trim().isEmpty() && 
+                    !customGroupName.trim().equals(customGroupNameFromParam.trim())) {
+                    // Użytkownik zmienił "Nazwa produktu w systemie" - użyj kombinacji jako identyfikatora
+                    finalGroupName = customGroupNameFromParam.trim() + " | " + customGroupName.trim();
+                }
             } else if (customGroupName != null && !customGroupName.trim().isEmpty()) {
                 // Frontend przesłał wartość w name[] - użyj jej (fallback jeśli groupName[] jest puste)
                 finalGroupName = customGroupName.trim();
