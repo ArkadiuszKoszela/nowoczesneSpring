@@ -214,6 +214,27 @@ public class ProjectController {
     }
     
     /**
+     * Zapisuje pojedynczą zmianę draft dla produktu (UPSERT - update jeśli istnieje, insert jeśli nie)
+     * PUT /api/projects/{id}/draft-changes/single
+     * Używane do szybkiej aktualizacji pojedynczego produktu (np. zmiana wariantu oferty)
+     */
+    @PutMapping("/{projectId}/draft-changes/single")
+    public ResponseEntity<Void> saveSingleDraftChange(
+            @PathVariable Long projectId,
+            @RequestBody pl.koszela.nowoczesnebud.DTO.DraftChangeDTO draftChange) {
+        logger.info("📥 Request: PUT /api/projects/{}/draft-changes/single (productId: {}, category: {})", 
+                   projectId, draftChange.getProductId(), draftChange.getCategory());
+        
+        try {
+            projectService.saveSingleDraftChange(projectId, draftChange);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            logger.error("❌ Błąd podczas zapisu pojedynczej draft change: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    /**
      * Pobiera draft changes dla projektu (opcjonalnie filtrowane po kategorii)
      * GET /api/projects/{id}/draft-changes?category=TILE
      */

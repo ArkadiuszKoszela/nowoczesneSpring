@@ -984,6 +984,58 @@ public class ProjectService {
     }
     
     /**
+     * Zapisuje pojedynczą zmianę draft dla produktu (UPSERT - update jeśli istnieje, insert jeśli nie)
+     * Używane do szybkiej aktualizacji pojedynczego produktu (np. zmiana wariantu oferty)
+     * 
+     * @param projectId ID projektu
+     * @param dto Draft change do zapisania
+     */
+    @Transactional
+    public void saveSingleDraftChange(Long projectId, DraftChangeDTO dto) {
+        logger.info("⚡ [Szybki zapis] saveSingleDraftChange - START (projectId: {}, productId: {}, category: {})", 
+                   projectId, dto.getProductId(), dto.getCategory());
+        
+        long startTime = System.currentTimeMillis();
+        
+        // UPSERT: znajdź istniejący draft change dla tego produktu
+        Optional<ProjectDraftChange> existingOpt = projectDraftChangeRepository
+            .findByProjectIdAndProductIdAndCategory(projectId, dto.getProductId(), dto.getCategory());
+        
+        ProjectDraftChange draft;
+        if (existingOpt.isPresent()) {
+            // UPDATE istniejącego
+            draft = existingOpt.get();
+            logger.debug("  Aktualizacja istniejącego draft change (ID: {})", draft.getId());
+        } else {
+            // INSERT nowego
+            draft = new ProjectDraftChange();
+            draft.setProjectId(projectId);
+            draft.setProductId(dto.getProductId());
+            draft.setCategory(dto.getCategory());
+            logger.debug("  Tworzenie nowego draft change");
+        }
+        
+        // Ustaw wszystkie pola (pełny stan)
+        draft.setDraftRetailPrice(dto.getDraftRetailPrice());
+        draft.setDraftPurchasePrice(dto.getDraftPurchasePrice());
+        draft.setDraftSellingPrice(dto.getDraftSellingPrice());
+        draft.setDraftQuantity(dto.getDraftQuantity());
+        draft.setDraftSelected(dto.getDraftSelected());
+        draft.setDraftMarginPercent(dto.getDraftMarginPercent());
+        draft.setDraftDiscountPercent(dto.getDraftDiscountPercent());
+        if (dto.getPriceChangeSource() != null && !dto.getPriceChangeSource().isEmpty()) {
+            draft.setPriceChangeSource(dto.getPriceChangeSource());
+        }
+        draft.setDraftIsMainOption(dto.getDraftIsMainOption());
+        
+        // Zapisz (save działa jako INSERT lub UPDATE w zależności od tego czy encja ma ID)
+        projectDraftChangeRepository.save(draft);
+        
+        long endTime = System.currentTimeMillis();
+        logger.info("⚡ [Szybki zapis] saveSingleDraftChange - END: {}ms", (endTime - startTime));
+    }
+    
+    /**
      * Pobiera draft changes dla projektu (opcjonalnie filtrowane po kategorii)
      * 
      * @param projectId ID projektu
