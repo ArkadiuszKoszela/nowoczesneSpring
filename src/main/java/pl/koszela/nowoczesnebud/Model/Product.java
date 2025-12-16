@@ -109,6 +109,7 @@ public class Product {
 
     // Typ produktu (dla grupowania - głównie dla Dachówek)
     @Column(name = "product_type")
+    @ExcelCellName("productType")
     private String productType;
 
     // === RABATY GLOBALNE (nie zapisywane w bazie - wypełniane dynamicznie) ===

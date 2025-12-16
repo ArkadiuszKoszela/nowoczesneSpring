@@ -41,8 +41,6 @@ public class ProductExportService {
 
         // Grupuj produkty po producencie i grupie
         Map<String, List<Product>> groupedProducts = groupProductsByManufacturerAndGroup(products);
-        
-        System.out.println("📤 Eksport: " + groupedProducts.size() + " grup produktów (kategoria: " + category + ")");
 
         // Utwórz ZIP w pamięci
         ByteArrayOutputStream zipOutputStream = new ByteArrayOutputStream();
@@ -52,8 +50,6 @@ public class ProductExportService {
             for (Map.Entry<String, List<Product>> entry : groupedProducts.entrySet()) {
                 String fileName = entry.getKey() + ".xlsx";
                 List<Product> groupProducts = entry.getValue();
-                
-                System.out.println("📄 Tworzenie pliku: " + fileName + " (" + groupProducts.size() + " produktów)");
                 
                 // Utwórz plik Excel dla tej grupy (z kategorią)
                 byte[] excelFile = createExcelFile(groupProducts, category);
@@ -68,7 +64,6 @@ public class ProductExportService {
         }
 
         byte[] zipBytes = zipOutputStream.toByteArray();
-        System.out.println("✅ Utworzono ZIP: " + zipBytes.length + " bajtów");
         return zipBytes;
     }
 
@@ -142,7 +137,7 @@ public class ProductExportService {
                     "Typ"                              // type
                 };
             } else {
-                // DACHÓWKI I RYNNY: name, unitDetalP, quantityCo, basicDisc, additional, promotion, skonto, discountCalculationMethod
+                // DACHÓWKI I RYNNY: name, unitDetalP, quantityCo, basicDisc, additional, promotion, skonto, discountCalculationMethod, productType
                 headers = new String[]{
                     "Nazwa",                           // name
                     "Cena katalogowa",                 // unitDetalP
@@ -151,7 +146,8 @@ public class ProductExportService {
                     "Rabat dodatkowy",                 // additional
                     "Rabat promocyjny",                // promotion
                     "Skonto",                          // skonto
-                    "Sposób obliczania rabatu"         // discountCalculationMethod
+                    "Sposób obliczania rabatu",        // discountCalculationMethod
+                    "Typ produktu"                     // productType
                 };
             }
             
@@ -197,9 +193,12 @@ public class ProductExportService {
                     : "";
                 createCell(row, colIndex++, methodValue, cellStyle);
                 
-                // Typ (kolumna 8) - tylko dla akcesoriów
                 if (category == ProductCategory.ACCESSORY) {
+                    // Typ (kolumna 8) - tylko dla akcesoriów
                     createCell(row, colIndex++, product.getAccessoryType(), cellStyle);
+                } else {
+                    // Typ produktu (kolumna 8) - dla dachówek i rynien
+                    createCell(row, colIndex++, product.getProductType(), cellStyle);
                 }
             }
             

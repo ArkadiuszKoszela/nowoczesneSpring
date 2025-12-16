@@ -1,6 +1,9 @@
 package pl.koszela.nowoczesnebud.Repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import pl.koszela.nowoczesnebud.Model.ProductCategory;
 import pl.koszela.nowoczesnebud.Model.ProjectProduct;
@@ -36,8 +39,11 @@ public interface ProjectProductRepository extends JpaRepository<ProjectProduct, 
     
     /**
      * Usuń wszystkie produkty projektu
+     * Używa natywnego SQL DELETE dla lepszej wydajności przy dużej liczbie rekordów
      * @param projectId ID projektu
      */
-    void deleteByProjectId(Long projectId);
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = "DELETE FROM project_products WHERE project_id = :projectId", nativeQuery = true)
+    void deleteByProjectId(@Param("projectId") Long projectId);
 }
 

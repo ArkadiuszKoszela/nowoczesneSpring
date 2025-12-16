@@ -6,7 +6,8 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "project_draft_changes_ws", indexes = {
     @Index(name = "idx_draft_change_ws_project_category", columnList = "project_id,category"),
-    @Index(name = "idx_draft_change_ws_product_id", columnList = "product_id")
+    @Index(name = "idx_draft_change_ws_product_id", columnList = "product_id"),
+    @Index(name = "idx_draft_change_ws_project_product_category", columnList = "project_id,product_id,category")
 })
 public class ProjectDraftChange {
     

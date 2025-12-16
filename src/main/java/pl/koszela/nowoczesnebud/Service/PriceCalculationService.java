@@ -39,7 +39,9 @@ public class PriceCalculationService {
             return 0.00;
         }
 
-        double retailPrice = purchasePrice * (100 + product.getMarginPercent()) / 100;
+        // Jeśli marginPercent jest null, użyj 0 jako domyślnej wartości
+        double marginPercent = product.getMarginPercent() != null ? product.getMarginPercent() : 0.0;
+        double retailPrice = purchasePrice * (100 + marginPercent) / 100;
         return setScale(retailPrice);
     }
 

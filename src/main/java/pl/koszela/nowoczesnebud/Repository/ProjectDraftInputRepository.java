@@ -1,6 +1,9 @@
 package pl.koszela.nowoczesnebud.Repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import pl.koszela.nowoczesnebud.Model.ProjectDraftInput;
 
@@ -16,8 +19,11 @@ public interface ProjectDraftInputRepository extends JpaRepository<ProjectDraftI
     
     /**
      * Usuwa wszystkie draft inputs dla projektu
+     * Używa natywnego SQL DELETE, aby uniknąć problemów z batch delete, gdy rekordy już nie istnieją
      */
-    void deleteByProjectId(Long projectId);
+    @Modifying
+    @Query("DELETE FROM ProjectDraftInput d WHERE d.projectId = :projectId")
+    void deleteByProjectId(@Param("projectId") Long projectId);
 }
 
 

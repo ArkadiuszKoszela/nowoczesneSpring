@@ -49,10 +49,22 @@ public class OfferTemplateService {
 
     /**
      * Pobierz domyślny szablon
+     * ⚠️ WAŻNE: Jeśli jest więcej niż jeden domyślny szablon, zwraca pierwszy
      */
     public Optional<OfferTemplate> getDefaultTemplate() {
         logger.info("Pobieranie domyślnego szablonu");
-        return templateRepository.findByIsDefaultTrue();
+        // ⚠️ WAŻNE: Używamy findAll() i filtrujemy, bo findByIsDefaultTrue() rzuca wyjątek gdy jest więcej niż 1 domyślny szablon
+        List<OfferTemplate> defaultTemplates = templateRepository.findAll().stream()
+                .filter(t -> t.getIsDefault() != null && t.getIsDefault())
+                .collect(java.util.stream.Collectors.toList());
+        
+        if (defaultTemplates.isEmpty()) {
+            return Optional.empty();
+        } else if (defaultTemplates.size() > 1) {
+            logger.warn("⚠️ Znaleziono {} domyślnych szablonów (powinien być tylko 1)! Zwracam pierwszy.", defaultTemplates.size());
+        }
+        
+        return Optional.of(defaultTemplates.get(0));
     }
 
     /**
@@ -64,15 +76,17 @@ public class OfferTemplateService {
         
         // Jeśli ustawiamy jako domyślny, usuń domyślny status z innych szablonów
         if (template.getIsDefault() != null && template.getIsDefault()) {
-            templateRepository.findByIsDefaultTrue().ifPresent(defaultTemplate -> {
-                // Dla nowego szablonu (ID == null) zawsze usuń domyślny status z innych
-                // Dla istniejącego szablonu usuń tylko jeśli to inny szablon
-                if (template.getId() == null || !defaultTemplate.getId().equals(template.getId())) {
-                    defaultTemplate.setIsDefault(false);
-                    templateRepository.save(defaultTemplate);
-                    logger.info("Usunięto domyślny status z szablonu ID: {}", defaultTemplate.getId());
-                }
-            });
+            // ⚠️ WAŻNE: Używamy findAll() i filtrujemy, bo findByIsDefaultTrue() rzuca wyjątek gdy jest więcej niż 1 domyślny szablon
+            List<OfferTemplate> defaultTemplates = templateRepository.findAll().stream()
+                    .filter(t -> t.getIsDefault() != null && t.getIsDefault())
+                    .filter(t -> template.getId() == null || !t.getId().equals(template.getId())) // Pomiń aktualnie zapisywany szablon
+                    .collect(java.util.stream.Collectors.toList());
+            
+            for (OfferTemplate defaultTemplate : defaultTemplates) {
+                defaultTemplate.setIsDefault(false);
+                templateRepository.save(defaultTemplate);
+                logger.info("Usunięto domyślny status z szablonu ID: {}", defaultTemplate.getId());
+            }
         }
         
         OfferTemplate saved = templateRepository.save(template);
@@ -116,10 +130,17 @@ public class OfferTemplateService {
         }
         
         // Usuń domyślny status z innych szablonów
-        templateRepository.findByIsDefaultTrue().ifPresent(defaultTemplate -> {
+        // ⚠️ WAŻNE: Używamy findAll() i filtrujemy, bo findByIsDefaultTrue() rzuca wyjątek gdy jest więcej niż 1 domyślny szablon
+        List<OfferTemplate> defaultTemplates = templateRepository.findAll().stream()
+                .filter(t -> t.getIsDefault() != null && t.getIsDefault())
+                .filter(t -> !t.getId().equals(id)) // Pomiń aktualnie ustawiany szablon
+                .collect(java.util.stream.Collectors.toList());
+        
+        for (OfferTemplate defaultTemplate : defaultTemplates) {
             defaultTemplate.setIsDefault(false);
             templateRepository.save(defaultTemplate);
-        });
+            logger.info("Usunięto domyślny status z szablonu ID: {}", defaultTemplate.getId());
+        }
         
         // Ustaw nowy domyślny szablon
         OfferTemplate template = templateOpt.get();
