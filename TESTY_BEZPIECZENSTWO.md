@@ -132,3 +132,5 @@ spring.datasource.url=jdbc:mysql://.../defaultdb_test?...
 
 **Wniosek:** `@Transactional` w testach zapewnia **100% bezpieczeństwo**. Możesz użyć tej samej bazy co produkcja bez obaw! 🎯
 
+
+

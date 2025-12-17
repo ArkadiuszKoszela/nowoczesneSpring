@@ -29,3 +29,19 @@ build/
 
 ### VS Code ###
 .vscode/
+.history/
+**/.history/
+**/.history/**
+*.history
+
+### Cursor IDE ###
+.cursor/
+.cursor/**
+
+### Backup and temporary files ###
+*.java~
+*.backup
+*.bak
+*.old
+*.tmp
+*~

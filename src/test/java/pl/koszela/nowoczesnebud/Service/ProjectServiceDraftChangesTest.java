@@ -15,6 +15,8 @@ import pl.koszela.nowoczesnebud.Model.ProductCategory;
 import pl.koszela.nowoczesnebud.Model.PriceChangeSource;
 import pl.koszela.nowoczesnebud.Model.ProjectDraftChange;
 import pl.koszela.nowoczesnebud.Model.ProjectProduct;
+import pl.koszela.nowoczesnebud.Model.Project;
+import org.hibernate.Hibernate;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -863,7 +865,6 @@ class ProjectServiceDraftChangesTest extends BaseProjectServiceTest {
 
     // ========== TEST 16: Batch update opcji grupy - poprawność ==========
     @Test
-    @Disabled("Tymczasowo wyłączony – weryfikacja batch update opcji grupy")
     @DisplayName("TEST 16: Batch update opcji grupy - poprawność")
     void testUpdateGroupOptionBatch_Correctness() {
         long testStartTime = System.currentTimeMillis();
@@ -920,8 +921,10 @@ class ProjectServiceDraftChangesTest extends BaseProjectServiceTest {
         logger.info("⏱️ [PERFORMANCE] TEST 16 - Batch update opcji grupy (10 produktów): {}ms", updateBatchDuration);
         
         // 5. Sprawdź zaktualizowany stan
-        List<ProjectDraftChange> afterUpdate = projectDraftChangeRepository.findByProjectId(testProject.getId());
-        assertEquals(10, afterUpdate.size(), "Powinno nadal być 10 draft changes");
+        // ⚠️ WAŻNE: Używamy findByProjectIdAndCategory zamiast findByProjectId, żeby uniknąć rekordów z innych kategorii
+        List<ProjectDraftChange> afterUpdate =
+                projectDraftChangeRepository.findByProjectIdAndCategory(testProject.getId(), ProductCategory.TILE.name());
+        assertEquals(10, afterUpdate.size(), "Powinno nadal być 10 draft changes dla kategorii TILE");
         for (ProjectDraftChange dc : afterUpdate) {
             assertEquals(GroupOption.OPTIONAL, dc.getDraftIsMainOption(), "Opcja powinna być OPTIONAL");
             // ⚠️ WAŻNE: Inne pola NIE powinny być zmienione
@@ -985,6 +988,41 @@ class ProjectServiceDraftChangesTest extends BaseProjectServiceTest {
         long testDuration = System.currentTimeMillis() - testStartTime;
         logger.info("⏱️ [PERFORMANCE] TEST 17 - CAŁKOWITY CZAS: {}ms | createProducts: {}ms | updateBatch: {}ms",
                    testDuration, createProductsDuration, updateBatchDuration);
+    }
+
+    // ========== TEST 19: saveProjectData - brak LazyInitializationException dla projectProductGroups ==========
+    @Test
+    @DisplayName("TEST 19: saveProjectData - tworzy projectProductGroups bez LazyInitializationException")
+    void testSaveProjectData_CreatesProjectProductGroups_NoLazyInit() {
+        // GIVEN: 2 produkty w jednej grupie, draftIsMainOption ustawione
+        List<Product> products = createProductsBatch(2, ProductCategory.TILE);
+
+        SaveDraftChangesRequest draftRequest = new SaveDraftChangesRequest();
+        draftRequest.setCategory(ProductCategory.TILE.name());
+        List<DraftChangeDTO> changes = new ArrayList<>();
+        for (Product p : products) {
+            DraftChangeDTO dto = new DraftChangeDTO(p.getId(), ProductCategory.TILE.name());
+            dto.setDraftRetailPrice(100.0);
+            dto.setDraftPurchasePrice(80.0);
+            dto.setDraftSellingPrice(120.0);
+            dto.setDraftQuantity(1.0);
+            dto.setDraftIsMainOption(GroupOption.MAIN);
+            changes.add(dto);
+        }
+        draftRequest.setChanges(changes);
+
+        projectService.saveDraftChanges(testProject.getId(), draftRequest);
+
+        // WHEN: Zapisz projekt
+        SaveProjectDataRequest saveRequest = new SaveProjectDataRequest();
+        saveRequest.setTilesMargin(20.0);
+        projectService.saveProjectData(testProject.getId(), saveRequest);
+
+        // THEN: projectProductGroups utworzone i dostępne bez LazyInitializationException
+        Project reloaded = projectRepository.findById(testProject.getId()).orElseThrow();
+        Hibernate.initialize(reloaded.getProjectProductGroups());
+        assertNotNull(reloaded.getProjectProductGroups(), "Kolekcja projectProductGroups nie powinna być null");
+        assertFalse(reloaded.getProjectProductGroups().isEmpty(), "Powinna istnieć co najmniej jedna grupa produktowa");
     }
     
     // ========== TEST 18: Batch update opcji grupy - wydajność (duża liczba produktów) ==========

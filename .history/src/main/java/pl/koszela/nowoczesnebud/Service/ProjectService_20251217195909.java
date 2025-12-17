@@ -736,12 +736,6 @@ public class ProjectService {
                 long createGroupsEndTime = System.currentTimeMillis();
                 logger.info("⏱️ [PERFORMANCE] [Zapisz projekt] Tworzenie {} ProjectProductGroup - {}ms", 
                            createdGroupsCount, createGroupsEndTime - createGroupsStartTime);
-                
-                // ⚠️ WAŻNE: Zapisz grupy z draft changes do bazy
-                if (createdGroupsCount > 0) {
-                    entityManager.flush();
-                    logger.info("⏱️ [PERFORMANCE] [Zapisz projekt] Zapisano {} ProjectProductGroup z draft changes do bazy", createdGroupsCount);
-                }
             }
             long transferGroupsEndTime = System.currentTimeMillis();
             logger.info("⏱️ [PERFORMANCE] [Zapisz projekt] Przenoszenie opcji grup z draft changes - {}ms", 
@@ -872,8 +866,22 @@ public class ProjectService {
                        processRequestProductsEndTime - processRequestProductsStartTime);
         }
         
-        // 4. Dodaj nowe ProjectProductGroup z request (batch insert zamiast Hibernate ORM)
-        // ⚠️ UWAGA: Stare ProjectProductGroup zostały już usunięte na początku sekcji opcji grup (z draft changes)
+        // 4. Usuń stare ProjectProductGroup
+        long clearGroupsStartTime = System.currentTimeMillis();
+        
+        // ⚠️ WAŻNE: Załaduj project ponownie jeśli został odłączony (dla bezpieczeństwa)
+        // project.getProjectProductGroups() wymaga aktywnej sesji Hibernate (lazy loading)
+        if (!entityManager.contains(project)) {
+            project = entityManager.find(Project.class, projectId);
+        }
+        
+        project.getProjectProductGroups().clear();
+        entityManager.flush(); // Wymuś usunięcie przed dodaniem nowych
+        long clearGroupsEndTime = System.currentTimeMillis();
+        logger.info("⏱️ [PERFORMANCE] [Zapisz projekt] Usunięcie starych ProjectProductGroup + flush - {}ms", 
+                   clearGroupsEndTime - clearGroupsStartTime);
+        
+        // 5. Dodaj nowe ProjectProductGroup z request (batch insert zamiast Hibernate ORM)
         long addProductGroupsStartTime = System.currentTimeMillis();
         if (request.getProductGroups() != null && !request.getProductGroups().isEmpty()) {
             // ⚡ OPTYMALIZACJA: Użyj JDBC batch insert zamiast Hibernate ORM dla dużej liczby rekordów
@@ -956,12 +964,27 @@ public class ProjectService {
      * - "Nowa cena" = draft changes (jeśli istnieją) lub aktualne ceny z cennika
      */
     public List<ProductComparisonDTO> getProductComparison(Long projectId, ProductCategory category) {
-        // ⚠️ WAŻNE: KOLEJNOŚĆ ŁADOWANIA DANYCH (wymagana):
-        // 1. project_draft_changes_ws (najpierw)
-        // 2. project_products (potem)
-        // 3. products (na końcu)
+        // 1. Pobierz wszystkie produkty z aktualnego cennika
+        List<Product> currentProducts = productRepository.findByCategory(category);
         
-        // 1. Pobierz draft changes (tymczasowe, niezapisane zmiany) - NAJPIERW
+        // 2. Pobierz zapisane dane z ProjectProduct (ostatni zapisany stan)
+        List<ProjectProduct> savedProducts = projectProductRepository.findByProjectIdAndCategory(projectId, category);
+        // ⚠️ Obsługa duplikatów: jeśli są duplikaty productId, wybierz najnowszy (większe id)
+        Map<Long, ProjectProduct> savedProductsMap = savedProducts.stream()
+            .collect(Collectors.toMap(
+                ProjectProduct::getProductId, 
+                pp -> pp,
+                (existing, replacement) -> {
+                    // Jeśli istnieje duplikat, wybierz ten z większym id (nowszy)
+                    if (replacement.getId() != null && existing.getId() != null) {
+                        return replacement.getId() > existing.getId() ? replacement : existing;
+                    }
+                    return replacement; // Jeśli brak id, użyj nowego
+                }
+            ));
+        logger.info("  Znaleziono {} zapisanych produktów ({} unikalnych)", savedProducts.size(), savedProductsMap.size());
+        
+        // 3. Pobierz draft changes (tymczasowe, niezapisane zmiany)
         List<ProjectDraftChange> draftChanges = projectDraftChangeRepository.findByProjectIdAndCategory(projectId, category.name());
         // ⚠️ WAŻNE: Obsługa duplikatów - jeśli są duplikaty productId, wybierz najnowszy (większe id)
         // To zapobiega błędom "Duplicate key" gdy w bazie są duplikaty draft changes dla tego samego produktu
@@ -991,24 +1014,7 @@ public class ProjectService {
             logger.info("  Marża/rabat kategorii z draft: marża={}, rabat={}", categoryDraftMargin, categoryDraftDiscount);
         }
         
-        // 2. Pobierz zapisane dane z ProjectProduct (ostatni zapisany stan) - DRUGIE
-        List<ProjectProduct> savedProducts = projectProductRepository.findByProjectIdAndCategory(projectId, category);
-        // ⚠️ Obsługa duplikatów: jeśli są duplikaty productId, wybierz najnowszy (większe id)
-        Map<Long, ProjectProduct> savedProductsMap = savedProducts.stream()
-            .collect(Collectors.toMap(
-                ProjectProduct::getProductId, 
-                pp -> pp,
-                (existing, replacement) -> {
-                    // Jeśli istnieje duplikat, wybierz ten z większym id (nowszy)
-                    if (replacement.getId() != null && existing.getId() != null) {
-                        return replacement.getId() > existing.getId() ? replacement : existing;
-                    }
-                    return replacement; // Jeśli brak id, użyj nowego
-                }
-            ));
-        logger.info("  Znaleziono {} zapisanych produktów ({} unikalnych)", savedProducts.size(), savedProductsMap.size());
-        
-        // 3. Pobierz opcje grup z ProjectProductGroup (zapisane opcje)
+        // 3a. Pobierz opcje grup z ProjectProductGroup (zapisane opcje)
         List<ProjectProductGroup> productGroups = projectProductGroupRepository.findByProjectIdAndCategory(projectId, category);
         
         // ⚠️ WAŻNE: Mapuj opcje grup po manufacturer + groupName (klucz: "manufacturer_groupName")
@@ -1021,10 +1027,7 @@ public class ProjectService {
             ));
         logger.info("  Znaleziono {} opcji grup (zapisane)", savedGroupOptionsMap.size());
         
-        // 4. Pobierz wszystkie produkty z aktualnego cennika - NA KOŃCU
-        List<Product> currentProducts = productRepository.findByCategory(category);
-        
-        // 5. Połącz cennik + saved + draft i utwórz DTO
+        // 4. Połącz cennik + saved + draft i utwórz DTO
         List<ProductComparisonDTO> comparison = new ArrayList<>();
         
         for (Product current : currentProducts) {
@@ -1126,17 +1129,32 @@ public class ProjectService {
             
             // ⚠️ WAŻNE: Ustaw isMainOption z priorytetami:
             // 1. draftIsMainOption z draft changes (najwyższy priorytet - tymczasowe, niezapisane)
-            //    - Jeśli draftIsMainOption jest ustawione (nawet jeśli NONE), użyj go - nadpisuje zapisane dane
-            //    - NONE w draft changes oznacza "nie wybrano" i nadpisuje zapisane MAIN/OPTIONAL
-            // 2. isMainOption z ProjectProductGroup (zapisane opcje) - tylko jeśli nie ma draftIsMainOption
+            //    - Jeśli draft istnieje i wszystkie inne pola są null, to to jest tylko aktualizacja opcji grupy
+            //    - W takim przypadku użyj draftIsMainOption (może być NONE - "Nie wybrano")
+            // 2. isMainOption z ProjectProductGroup (zapisane opcje)
             // 3. NONE (domyślnie - "Nie wybrano")
             GroupOption isMainOption = GroupOption.NONE;
-            if (draft != null && draft.getDraftIsMainOption() != null) {
-                // ⚠️ WAŻNE: draftIsMainOption ma zawsze priorytet, nawet jeśli jest NONE
-                // Jeśli użytkownik ustawia NONE w draft changes, to nadpisuje zapisane dane (MAIN/OPTIONAL)
-                isMainOption = draft.getDraftIsMainOption();
-            } else if (current.getManufacturer() != null && current.getGroupName() != null) {
-                // Priorytet 2: ProjectProductGroup (tylko jeśli nie ma draftIsMainOption w draft changes)
+            if (draft != null) {
+                // Sprawdź, czy to jest tylko aktualizacja opcji grupy (wszystkie inne pola są null)
+                boolean isOnlyGroupOptionUpdate = draft.getDraftRetailPrice() == null && 
+                                                  draft.getDraftPurchasePrice() == null && 
+                                                  draft.getDraftSellingPrice() == null && 
+                                                  draft.getDraftQuantity() == null && 
+                                                  draft.getDraftSelected() == null &&
+                                                  draft.getDraftMarginPercent() == null &&
+                                                  draft.getDraftDiscountPercent() == null;
+                
+                if (isOnlyGroupOptionUpdate) {
+                    // To jest tylko aktualizacja opcji grupy - użyj draftIsMainOption (może być NONE - "Nie wybrano")
+                    isMainOption = draft.getDraftIsMainOption() != null ? draft.getDraftIsMainOption() : GroupOption.NONE;
+                } else if (draft.getDraftIsMainOption() != null && draft.getDraftIsMainOption() != GroupOption.NONE) {
+                    // Jeśli są inne pola, użyj draftIsMainOption tylko jeśli nie jest NONE
+                    isMainOption = draft.getDraftIsMainOption();
+                }
+            }
+            
+            // Priorytet 2: ProjectProductGroup (tylko jeśli nie ma draft changes z opcjami grup)
+            if (isMainOption == GroupOption.NONE && current.getManufacturer() != null && current.getGroupName() != null) {
                 String groupKey = current.getManufacturer() + "_" + current.getGroupName();
                 GroupOption savedOption = savedGroupOptionsMap.get(groupKey);
                 if (savedOption != null) {
@@ -1499,17 +1517,12 @@ public class ProjectService {
             ? request.getDraftIsMainOption().name() 
             : pl.koszela.nowoczesnebud.Model.GroupOption.NONE.name();
         
-        // ⚡ OPTYMALIZACJA: JDBC batch UPSERT - INSERT ... ON DUPLICATE KEY UPDATE
-        // ⚠️ WAŻNE: Używamy UPSERT, bo rekordy mogą nie istnieć (użytkownik może zmienić opcję grupy bez wcześniejszego zapisania draft changes)
-        // UNIQUE constraint na (project_id, product_id, category) umożliwia użycie ON DUPLICATE KEY UPDATE
-        // ⚠️ UWAGA: W MySQL używamy VALUES() dla wartości z INSERT (kompatybilne ze wszystkimi wersjami)
-        // ⚠️ WAŻNE: W ON DUPLICATE KEY UPDATE używamy bezpośrednio wartości z parametrów, żeby upewnić się, że aktualizacja działa
-        String sql = "INSERT INTO project_draft_changes_ws " +
-                    "(project_id, product_id, category, draft_is_main_option, created_at, updated_at) " +
-                    "VALUES (?, ?, ?, ?, ?, ?) " +
-                    "ON DUPLICATE KEY UPDATE " +
-                    "draft_is_main_option = ?, " +
-                    "updated_at = ?";
+        // ⚡ OPTYMALIZACJA: JDBC batch UPDATE - aktualizuj tylko draft_is_main_option
+        // ⚠️ WAŻNE: Używamy zwykłego UPDATE, bo rekordy zawsze już istnieją przed wywołaniem tej metody
+        // (użytkownik najpierw zapisuje draft changes przez saveDraftChanges, a potem zmienia opcję grupy)
+        String sql = "UPDATE project_draft_changes_ws " +
+                    "SET draft_is_main_option = ?, updated_at = ? " +
+                    "WHERE project_id = ? AND product_id = ? AND category = ?";
         
         int batchSize = 1000;
         int totalBatches = (int)Math.ceil((double)totalProductIds / batchSize);
@@ -1539,17 +1552,13 @@ public class ProjectService {
                             Long productId = request.getProductIds().get(i);
                             
                             int paramIndex = 1;
-                            // INSERT VALUES clause
-                            pstmt.setLong(paramIndex++, projectId);
-                            pstmt.setObject(paramIndex++, productId); // productId może być NULL
-                            pstmt.setString(paramIndex++, request.getCategory());
+                            // UPDATE SET clause
                             pstmt.setString(paramIndex++, draftIsMainOptionValue);
-                            pstmt.setTimestamp(paramIndex++, now); // created_at
-                            pstmt.setTimestamp(paramIndex++, now); // updated_at
-                            
-                            // ON DUPLICATE KEY UPDATE clause - używamy tych samych wartości
-                            pstmt.setString(paramIndex++, draftIsMainOptionValue); // draft_is_main_option dla UPDATE
-                            pstmt.setTimestamp(paramIndex++, now); // updated_at dla UPDATE
+                            pstmt.setTimestamp(paramIndex++, now);
+                            // WHERE clause
+                            pstmt.setLong(paramIndex++, projectId);
+                            pstmt.setLong(paramIndex++, productId);
+                            pstmt.setString(paramIndex++, request.getCategory());
                             
                             pstmt.addBatch();
                         }
@@ -1567,33 +1576,29 @@ public class ProjectService {
                         long batchUpdateTime = batchUpdateEnd - batchUpdateStart;
                         totalUpdateTime[0] += batchUpdateTime;
                         
-                        // ⚠️ UWAGA: W MySQL executeBatch() dla INSERT ... ON DUPLICATE KEY UPDATE zwraca:
-                        // - 1 dla INSERT (nowy rekord został utworzony)
-                        // - 2 dla UPDATE (istniejący rekord został zaktualizowany)
+                        // ⚠️ UWAGA: W MySQL executeBatch() dla UPDATE zwraca:
+                        // - 1 dla UPDATE (rekord został zaktualizowany)
                         // - 0 dla "no-op" (UPDATE nie zmienił żadnych wartości, bo były identyczne)
                         // - -2 (Statement.SUCCESS_NO_INFO) dla sukcesu bez szczegółów (często w batch operations)
                         // - inne ujemne wartości dla błędów
-                        int insertCount = 0;
                         int updateCount = 0;
                         int noOpCount = 0;
                         int successNoInfoCount = 0;
                         int errorCount = 0;
                         for (int result : results) {
-                            if (result == 1) insertCount++; // INSERT
-                            else if (result == 2) updateCount++; // UPDATE
-                            else if (result == 0) noOpCount++; // No-op
+                            if (result == 1) updateCount++;
+                            else if (result == 0) noOpCount++;
                             else if (result == -2 || result == java.sql.Statement.SUCCESS_NO_INFO) {
                                 successNoInfoCount++; // Sukces, ale bez szczegółów (często w batch)
                             } else if (result < 0) {
                                 errorCount++;
                             } else {
                                 // Inne wartości dodatnie traktujemy jako sukces
-                                if (result > 2) updateCount++; // Może być > 2 dla niektórych przypadków
-                                else insertCount++;
+                                updateCount++;
                             }
                         }
-                        logger.info("⏱️ [PERFORMANCE] Batch {}/{} przetworzony (UPSERT draft_is_main_option) | rekordów: {} | INSERT: {} | UPDATE: {} | NO-OP: {} | SUCCESS_NO_INFO: {} | ERROR: {} | czas: {}ms", 
-                                   batchIndex + 1, totalBatches, recordsInBatch, insertCount, updateCount, noOpCount, successNoInfoCount, errorCount, batchUpdateTime);
+                        logger.info("⏱️ [PERFORMANCE] Batch {}/{} przetworzony (UPDATE draft_is_main_option) | rekordów: {} | UPDATE: {} | NO-OP: {} | SUCCESS_NO_INFO: {} | ERROR: {} | czas: {}ms", 
+                                   batchIndex + 1, totalBatches, recordsInBatch, updateCount, noOpCount, successNoInfoCount, errorCount, batchUpdateTime);
                         
                         // ⚠️ WAŻNE: Jeśli są błędy (ujemne wartości inne niż -2), rzuć wyjątek
                         if (errorCount > 0) {
@@ -1609,9 +1614,6 @@ public class ProjectService {
                 }
             }
         });
-        
-        // ⚠️ WAŻNE: Wyczyść cache Hibernate, żeby test mógł odczytać zaktualizowane dane
-        entityManager.clear();
         
         long duration = System.currentTimeMillis() - startTime;
         logger.info("⏱️ [PERFORMANCE] UPDATE GROUP OPTION BATCH - END | produktów: {} | batchy: {} | czas całkowity: {}ms | prepare: {}ms | update: {}ms", 

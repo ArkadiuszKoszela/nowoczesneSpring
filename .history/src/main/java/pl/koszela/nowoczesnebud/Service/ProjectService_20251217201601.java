@@ -956,12 +956,27 @@ public class ProjectService {
      * - "Nowa cena" = draft changes (jeśli istnieją) lub aktualne ceny z cennika
      */
     public List<ProductComparisonDTO> getProductComparison(Long projectId, ProductCategory category) {
-        // ⚠️ WAŻNE: KOLEJNOŚĆ ŁADOWANIA DANYCH (wymagana):
-        // 1. project_draft_changes_ws (najpierw)
-        // 2. project_products (potem)
-        // 3. products (na końcu)
+        // 1. Pobierz wszystkie produkty z aktualnego cennika
+        List<Product> currentProducts = productRepository.findByCategory(category);
         
-        // 1. Pobierz draft changes (tymczasowe, niezapisane zmiany) - NAJPIERW
+        // 2. Pobierz zapisane dane z ProjectProduct (ostatni zapisany stan)
+        List<ProjectProduct> savedProducts = projectProductRepository.findByProjectIdAndCategory(projectId, category);
+        // ⚠️ Obsługa duplikatów: jeśli są duplikaty productId, wybierz najnowszy (większe id)
+        Map<Long, ProjectProduct> savedProductsMap = savedProducts.stream()
+            .collect(Collectors.toMap(
+                ProjectProduct::getProductId, 
+                pp -> pp,
+                (existing, replacement) -> {
+                    // Jeśli istnieje duplikat, wybierz ten z większym id (nowszy)
+                    if (replacement.getId() != null && existing.getId() != null) {
+                        return replacement.getId() > existing.getId() ? replacement : existing;
+                    }
+                    return replacement; // Jeśli brak id, użyj nowego
+                }
+            ));
+        logger.info("  Znaleziono {} zapisanych produktów ({} unikalnych)", savedProducts.size(), savedProductsMap.size());
+        
+        // 3. Pobierz draft changes (tymczasowe, niezapisane zmiany)
         List<ProjectDraftChange> draftChanges = projectDraftChangeRepository.findByProjectIdAndCategory(projectId, category.name());
         // ⚠️ WAŻNE: Obsługa duplikatów - jeśli są duplikaty productId, wybierz najnowszy (większe id)
         // To zapobiega błędom "Duplicate key" gdy w bazie są duplikaty draft changes dla tego samego produktu
@@ -991,24 +1006,7 @@ public class ProjectService {
             logger.info("  Marża/rabat kategorii z draft: marża={}, rabat={}", categoryDraftMargin, categoryDraftDiscount);
         }
         
-        // 2. Pobierz zapisane dane z ProjectProduct (ostatni zapisany stan) - DRUGIE
-        List<ProjectProduct> savedProducts = projectProductRepository.findByProjectIdAndCategory(projectId, category);
-        // ⚠️ Obsługa duplikatów: jeśli są duplikaty productId, wybierz najnowszy (większe id)
-        Map<Long, ProjectProduct> savedProductsMap = savedProducts.stream()
-            .collect(Collectors.toMap(
-                ProjectProduct::getProductId, 
-                pp -> pp,
-                (existing, replacement) -> {
-                    // Jeśli istnieje duplikat, wybierz ten z większym id (nowszy)
-                    if (replacement.getId() != null && existing.getId() != null) {
-                        return replacement.getId() > existing.getId() ? replacement : existing;
-                    }
-                    return replacement; // Jeśli brak id, użyj nowego
-                }
-            ));
-        logger.info("  Znaleziono {} zapisanych produktów ({} unikalnych)", savedProducts.size(), savedProductsMap.size());
-        
-        // 3. Pobierz opcje grup z ProjectProductGroup (zapisane opcje)
+        // 3a. Pobierz opcje grup z ProjectProductGroup (zapisane opcje)
         List<ProjectProductGroup> productGroups = projectProductGroupRepository.findByProjectIdAndCategory(projectId, category);
         
         // ⚠️ WAŻNE: Mapuj opcje grup po manufacturer + groupName (klucz: "manufacturer_groupName")
@@ -1021,10 +1019,7 @@ public class ProjectService {
             ));
         logger.info("  Znaleziono {} opcji grup (zapisane)", savedGroupOptionsMap.size());
         
-        // 4. Pobierz wszystkie produkty z aktualnego cennika - NA KOŃCU
-        List<Product> currentProducts = productRepository.findByCategory(category);
-        
-        // 5. Połącz cennik + saved + draft i utwórz DTO
+        // 4. Połącz cennik + saved + draft i utwórz DTO
         List<ProductComparisonDTO> comparison = new ArrayList<>();
         
         for (Product current : currentProducts) {
@@ -1126,17 +1121,32 @@ public class ProjectService {
             
             // ⚠️ WAŻNE: Ustaw isMainOption z priorytetami:
             // 1. draftIsMainOption z draft changes (najwyższy priorytet - tymczasowe, niezapisane)
-            //    - Jeśli draftIsMainOption jest ustawione (nawet jeśli NONE), użyj go - nadpisuje zapisane dane
-            //    - NONE w draft changes oznacza "nie wybrano" i nadpisuje zapisane MAIN/OPTIONAL
-            // 2. isMainOption z ProjectProductGroup (zapisane opcje) - tylko jeśli nie ma draftIsMainOption
+            //    - Jeśli draft istnieje i wszystkie inne pola są null, to to jest tylko aktualizacja opcji grupy
+            //    - W takim przypadku użyj draftIsMainOption (może być NONE - "Nie wybrano")
+            // 2. isMainOption z ProjectProductGroup (zapisane opcje)
             // 3. NONE (domyślnie - "Nie wybrano")
             GroupOption isMainOption = GroupOption.NONE;
-            if (draft != null && draft.getDraftIsMainOption() != null) {
-                // ⚠️ WAŻNE: draftIsMainOption ma zawsze priorytet, nawet jeśli jest NONE
-                // Jeśli użytkownik ustawia NONE w draft changes, to nadpisuje zapisane dane (MAIN/OPTIONAL)
-                isMainOption = draft.getDraftIsMainOption();
-            } else if (current.getManufacturer() != null && current.getGroupName() != null) {
-                // Priorytet 2: ProjectProductGroup (tylko jeśli nie ma draftIsMainOption w draft changes)
+            if (draft != null) {
+                // Sprawdź, czy to jest tylko aktualizacja opcji grupy (wszystkie inne pola są null)
+                boolean isOnlyGroupOptionUpdate = draft.getDraftRetailPrice() == null && 
+                                                  draft.getDraftPurchasePrice() == null && 
+                                                  draft.getDraftSellingPrice() == null && 
+                                                  draft.getDraftQuantity() == null && 
+                                                  draft.getDraftSelected() == null &&
+                                                  draft.getDraftMarginPercent() == null &&
+                                                  draft.getDraftDiscountPercent() == null;
+                
+                if (isOnlyGroupOptionUpdate) {
+                    // To jest tylko aktualizacja opcji grupy - użyj draftIsMainOption (może być NONE - "Nie wybrano")
+                    isMainOption = draft.getDraftIsMainOption() != null ? draft.getDraftIsMainOption() : GroupOption.NONE;
+                } else if (draft.getDraftIsMainOption() != null && draft.getDraftIsMainOption() != GroupOption.NONE) {
+                    // Jeśli są inne pola, użyj draftIsMainOption tylko jeśli nie jest NONE
+                    isMainOption = draft.getDraftIsMainOption();
+                }
+            }
+            
+            // Priorytet 2: ProjectProductGroup (tylko jeśli nie ma draft changes z opcjami grup)
+            if (isMainOption == GroupOption.NONE && current.getManufacturer() != null && current.getGroupName() != null) {
                 String groupKey = current.getManufacturer() + "_" + current.getGroupName();
                 GroupOption savedOption = savedGroupOptionsMap.get(groupKey);
                 if (savedOption != null) {
@@ -1502,14 +1512,13 @@ public class ProjectService {
         // ⚡ OPTYMALIZACJA: JDBC batch UPSERT - INSERT ... ON DUPLICATE KEY UPDATE
         // ⚠️ WAŻNE: Używamy UPSERT, bo rekordy mogą nie istnieć (użytkownik może zmienić opcję grupy bez wcześniejszego zapisania draft changes)
         // UNIQUE constraint na (project_id, product_id, category) umożliwia użycie ON DUPLICATE KEY UPDATE
-        // ⚠️ UWAGA: W MySQL używamy VALUES() dla wartości z INSERT (kompatybilne ze wszystkimi wersjami)
-        // ⚠️ WAŻNE: W ON DUPLICATE KEY UPDATE używamy bezpośrednio wartości z parametrów, żeby upewnić się, że aktualizacja działa
+        // ⚠️ UWAGA: W MySQL 8.0+ VALUES() jest deprecated, ale nadal działa. Używamy go dla kompatybilności z MySQL 5.7+
         String sql = "INSERT INTO project_draft_changes_ws " +
                     "(project_id, product_id, category, draft_is_main_option, created_at, updated_at) " +
                     "VALUES (?, ?, ?, ?, ?, ?) " +
                     "ON DUPLICATE KEY UPDATE " +
-                    "draft_is_main_option = ?, " +
-                    "updated_at = ?";
+                    "draft_is_main_option = VALUES(draft_is_main_option), " +
+                    "updated_at = VALUES(updated_at)";
         
         int batchSize = 1000;
         int totalBatches = (int)Math.ceil((double)totalProductIds / batchSize);
@@ -1546,10 +1555,6 @@ public class ProjectService {
                             pstmt.setString(paramIndex++, draftIsMainOptionValue);
                             pstmt.setTimestamp(paramIndex++, now); // created_at
                             pstmt.setTimestamp(paramIndex++, now); // updated_at
-                            
-                            // ON DUPLICATE KEY UPDATE clause - używamy tych samych wartości
-                            pstmt.setString(paramIndex++, draftIsMainOptionValue); // draft_is_main_option dla UPDATE
-                            pstmt.setTimestamp(paramIndex++, now); // updated_at dla UPDATE
                             
                             pstmt.addBatch();
                         }
@@ -1609,9 +1614,6 @@ public class ProjectService {
                 }
             }
         });
-        
-        // ⚠️ WAŻNE: Wyczyść cache Hibernate, żeby test mógł odczytać zaktualizowane dane
-        entityManager.clear();
         
         long duration = System.currentTimeMillis() - startTime;
         logger.info("⏱️ [PERFORMANCE] UPDATE GROUP OPTION BATCH - END | produktów: {} | batchy: {} | czas całkowity: {}ms | prepare: {}ms | update: {}ms", 
