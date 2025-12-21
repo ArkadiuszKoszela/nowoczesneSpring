@@ -4,7 +4,8 @@ public enum ProductCategory {
     TILE,
     GUTTER,
     ACCESSORY,
-    WINDOW
+    WINDOW,
+    SERVICE
 }
 
 

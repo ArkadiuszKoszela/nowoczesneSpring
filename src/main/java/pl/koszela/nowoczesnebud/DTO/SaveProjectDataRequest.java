@@ -21,8 +21,10 @@ public class SaveProjectDataRequest {
     private Double guttersDiscount;
     private Double accessoriesMargin;
     private Double accessoriesDiscount;
+    private Double servicesMargin;
+    private Double servicesDiscount;
     
-    // Dane produktów (z zakładek Dachówki/Rynny/Akcesoria)
+    // Dane produktów (z zakładek Dachówki/Rynny/Akcesoria/Usługi)
     private List<SaveProjectProductDTO> products;
     
     // Opcje grup produktowych (Główna/Opcjonalna)

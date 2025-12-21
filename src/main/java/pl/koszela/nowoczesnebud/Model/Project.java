@@ -90,6 +90,18 @@ public class Project {
     @Column(name = "accessories_discount")
     private Double accessoriesDiscount = 0.0;
     
+    /**
+     * USŁUGI - Marża (%)
+     */
+    @Column(name = "services_margin")
+    private Double servicesMargin = 0.0;
+    
+    /**
+     * USŁUGI - Rabat indywidualny (%)
+     */
+    @Column(name = "services_discount")
+    private Double servicesDiscount = 0.0;
+    
     
     /**
      * RELACJA: Jeden projekt → Wiele inputów

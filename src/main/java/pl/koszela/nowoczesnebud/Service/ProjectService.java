@@ -109,6 +109,8 @@ public class ProjectService {
             existingProject.setGuttersDiscount(project.getGuttersDiscount());
             existingProject.setAccessoriesMargin(project.getAccessoriesMargin());
             existingProject.setAccessoriesDiscount(project.getAccessoriesDiscount());
+            existingProject.setServicesMargin(project.getServicesMargin());
+            existingProject.setServicesDiscount(project.getServicesDiscount());
             
             // ⚠️ WAŻNE: Modyfikuj istniejącą kolekcję zamiast tworzenia nowej referencji
             // orphanRemoval=true wymaga abyśmy modyfikowali istniejącą kolekcję, nie zastępowali jej
@@ -206,6 +208,8 @@ public class ProjectService {
         if (project.getGuttersDiscount() == null) project.setGuttersDiscount(0.0);
         if (project.getAccessoriesMargin() == null) project.setAccessoriesMargin(0.0);
         if (project.getAccessoriesDiscount() == null) project.setAccessoriesDiscount(0.0);
+        if (project.getServicesMargin() == null) project.setServicesMargin(0.0);
+        if (project.getServicesDiscount() == null) project.setServicesDiscount(0.0);
         
             // ⚠️ WAŻNE: Wszystkie Input są teraz z formularza
             if (project.getInputs() != null && !project.getInputs().isEmpty()) {
@@ -427,6 +431,8 @@ public class ProjectService {
         project.setGuttersDiscount(request.getGuttersDiscount());
         project.setAccessoriesMargin(request.getAccessoriesMargin());
         project.setAccessoriesDiscount(request.getAccessoriesDiscount());
+        project.setServicesMargin(request.getServicesMargin());
+        project.setServicesDiscount(request.getServicesDiscount());
         long updateMarginsEndTime = System.currentTimeMillis();
         logger.info("⏱️ [PERFORMANCE] [Zapisz projekt] Aktualizacja rabatów globalnych: {}ms", updateMarginsEndTime - updateMarginsStartTime);
         
