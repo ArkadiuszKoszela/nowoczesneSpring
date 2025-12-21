@@ -2,6 +2,8 @@ package pl.koszela.nowoczesnebud.Service;
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import pl.koszela.nowoczesnebud.Model.Product;
 import pl.koszela.nowoczesnebud.Model.ProductCategory;
@@ -9,6 +11,7 @@ import pl.koszela.nowoczesnebud.Model.ProductCategory;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -20,6 +23,8 @@ import java.util.zip.ZipOutputStream;
  */
 @Service
 public class ProductExportService {
+
+    private static final Logger logger = LoggerFactory.getLogger(ProductExportService.class);
 
     /**
      * Eksportuj produkty do ZIP z plikami Excel
@@ -39,47 +44,119 @@ public class ProductExportService {
             throw new IllegalArgumentException("Produkty muszą mieć przypisaną kategorię");
         }
 
+        logger.info("📊 Eksportowanie {} produktów kategorii {}", products.size(), category);
+
         // Grupuj produkty po producencie i grupie
         Map<String, List<Product>> groupedProducts = groupProductsByManufacturerAndGroup(products);
+
+        logger.info("📁 Utworzono {} grup produktów do eksportu", groupedProducts.size());
 
         // Utwórz ZIP w pamięci
         ByteArrayOutputStream zipOutputStream = new ByteArrayOutputStream();
         
+        int filesAdded = 0;
         try (ZipOutputStream zipOut = new ZipOutputStream(zipOutputStream)) {
+            // Ustaw kodowanie UTF-8 dla nazw plików (obsługa polskich znaków)
+            zipOut.setComment("Eksport produktów - " + category.name());
+            
             // Dla każdej grupy utwórz plik Excel
             for (Map.Entry<String, List<Product>> entry : groupedProducts.entrySet()) {
                 String fileName = entry.getKey() + ".xlsx";
+                // Usuń nieprawidłowe znaki z nazwy pliku (Windows nie lubi niektórych znaków)
+                fileName = sanitizeFileName(fileName);
                 List<Product> groupProducts = entry.getValue();
+                
+                logger.info("📄 Tworzenie pliku Excel: {} ({} produktów)", fileName, groupProducts.size());
                 
                 // Utwórz plik Excel dla tej grupy (z kategorią)
                 byte[] excelFile = createExcelFile(groupProducts, category);
+                logger.info("📊 Plik Excel utworzony: {} - {} bajtów", fileName, excelFile.length);
                 
                 // Dodaj do ZIP
                 ZipEntry zipEntry = new ZipEntry(fileName);
-                zipEntry.setSize(excelFile.length);
+                // ⚠️ NIE ustawiamy setSize() - może powodować problemy z kompresją
                 zipOut.putNextEntry(zipEntry);
                 zipOut.write(excelFile);
                 zipOut.closeEntry();
+                // ⚠️ NIE wywołujemy flush() tutaj - może powodować problemy
+                filesAdded++;
+                
+                // Sprawdź rozmiar ZIP po każdym dodaniu
+                long zipSizeAfter = zipOutputStream.size();
+                logger.info("✅ Dodano do ZIP: {} ({} bajtów Excel) | Rozmiar ZIP po dodaniu: {} bajtów", 
+                    fileName, excelFile.length, zipSizeAfter);
             }
+            
+            // ⚠️ NIE wywołujemy finish() - close() w try-with-resources zrobi to automatycznie
+            logger.info("📦 ZipOutputStream - wszystkie wpisy dodane, zamykanie strumienia...");
         }
 
         byte[] zipBytes = zipOutputStream.toByteArray();
+        logger.info("✅ ZIP utworzony: {} plików Excel, {} bajtów", filesAdded, zipBytes.length);
+        
+        if (filesAdded == 0) {
+            logger.warn("⚠️ UWAGA: ZIP jest pusty - brak plików Excel! Sprawdź czy produkty mają ustawione manufacturer i groupName");
+        } else if (zipBytes.length == 0) {
+            logger.error("❌ BŁĄD: ZIP ma rozmiar 0 bajtów mimo {} dodanych plików!", filesAdded);
+        } else {
+            logger.info("✅ ZIP gotowy do pobrania: {} plików, {} bajtów", filesAdded, zipBytes.length);
+        }
+        
         return zipBytes;
     }
 
     /**
      * Grupuj produkty po producencie i grupie
      * Klucz: "Manufacturer-GroupName"
+     * Produkty bez manufacturer lub groupName są eksportowane z domyślnymi wartościami "BRAK_MANUFACTURER" i "BRAK_GROUP"
      */
     private Map<String, List<Product>> groupProductsByManufacturerAndGroup(List<Product> products) {
-        return products.stream()
-            .filter(p -> p.getManufacturer() != null && p.getGroupName() != null)
+        int totalProducts = products.size();
+        AtomicInteger productsWithMissingFields = new AtomicInteger(0);
+        
+        Map<String, List<Product>> grouped = products.stream()
             .collect(Collectors.groupingBy(product -> {
-                String manufacturer = product.getManufacturer().trim();
-                String groupName = product.getGroupName().trim();
-                // Format: "Manufacturer-GroupName" (tak jak w imporcie)
-                return manufacturer + "-" + groupName;
+                String manufacturer = product.getManufacturer();
+                String groupName = product.getGroupName();
+                
+                // Sprawdź czy pola są puste lub null
+                boolean hasManufacturer = manufacturer != null && !manufacturer.trim().isEmpty();
+                boolean hasGroupName = groupName != null && !groupName.trim().isEmpty();
+                
+                if (!hasManufacturer || !hasGroupName) {
+                    productsWithMissingFields.incrementAndGet();
+                    logger.warn("⚠️ Produkt bez wymaganych pól: ID={}, name={}, manufacturer={}, groupName={}", 
+                        product.getId(), product.getName(), manufacturer, groupName);
+                }
+                
+                // Użyj domyślnych wartości jeśli brak
+                String finalManufacturer = hasManufacturer ? manufacturer.trim() : "BRAK_MANUFACTURER";
+                String finalGroupName = hasGroupName ? groupName.trim() : "BRAK_GROUP";
+                
+                // ⚠️ WAŻNE: Format musi być DOKŁADNIE taki sam jak importowane pliki!
+                // Importowane pliki mają format: "Manufacturer-GroupName.xlsx" (z myślnikiem)
+                // Przykład: "CANTUS-czarna ang NUANE.xlsx", "BORHOLM-miedziana ang.xlsx"
+                // 
+                // Import używa getManufacturer() który dzieli: split("[\\s-]")[0] - pierwsza część przed spacją/myślnikiem
+                // Import używa extractGroupNameFromFileName() który dzieli: split("[\\s-]", 2)[1] - wszystko po pierwszej spacji/myślniku
+                // 
+                // ⚠️ WAŻNE: Manufacturer nie może zawierać myślnika (bo to jest separator), więc zamień myślniki w manufacturer na podkreślenia
+                // Spacje w manufacturer też zamień na podkreślenia (dla spójności)
+                String sanitizedManufacturer = finalManufacturer.replace(" ", "_").replace("-", "_");
+                
+                // Format: "Manufacturer-GroupName" (z myślnikiem) - DOKŁADNIE taki sam jak importowane pliki
+                return sanitizedManufacturer + "-" + finalGroupName;
             }));
+        
+        int missingFieldsCount = productsWithMissingFields.get();
+        if (missingFieldsCount > 0) {
+            logger.warn("⚠️ UWAGA: {} z {} produktów ma brakujące pola manufacturer lub groupName (używam domyślnych wartości)", 
+                missingFieldsCount, totalProducts);
+        }
+        
+        logger.info("📊 Grupowanie: {} produktów pogrupowanych w {} grup", totalProducts, grouped.size());
+        
+        return grouped;
     }
 
     /**
@@ -113,19 +190,25 @@ public class ProductExportService {
             cellStyle.setBorderLeft(BorderStyle.THIN);
             cellStyle.setBorderRight(BorderStyle.THIN);
             
-            // Styl dla liczb
+            // Styl dla liczb (z przecinkiem)
             CellStyle numberStyle = workbook.createCellStyle();
             numberStyle.cloneStyleFrom(cellStyle);
             DataFormat numberFormat = workbook.createDataFormat();
             numberStyle.setDataFormat(numberFormat.getFormat("#,##0.00"));
+            
+            // Styl dla liczb całkowitych (bez przecinka) - dla displayOrder
+            CellStyle integerStyle = workbook.createCellStyle();
+            integerStyle.cloneStyleFrom(cellStyle);
+            integerStyle.setDataFormat(numberFormat.getFormat("0")); // Format integer bez przecinka
             
             // Utwórz nagłówki - różne dla różnych kategorii
             Row headerRow = sheet.createRow(0);
             String[] headers;
             
             if (category == ProductCategory.ACCESSORY) {
-                // AKCESORIA: name, unitDetalPrice, unit, basicDiscount, additionalDiscount, promotionDiscount, skonto, discountCalculationMethod, type
+                // AKCESORIA: Lp, name, unitDetalPrice, unit, basicDiscount, additionalDiscount, promotionDiscount, skonto, discountCalculationMethod, type
                 headers = new String[]{
+                    "Lp",                              // displayOrder (liczba porządkowa)
                     "Nazwa",                           // name
                     "Cena katalogowa",                 // unitDetalPrice
                     "Jednostka",                       // unit
@@ -137,8 +220,9 @@ public class ProductExportService {
                     "Typ"                              // type
                 };
             } else {
-                // DACHÓWKI I RYNNY: name, unitDetalP, quantityCo, basicDisc, additional, promotion, skonto, discountCalculationMethod, productType
+                // DACHÓWKI I RYNNY: Lp, name, unitDetalP, quantityCo, basicDisc, additional, promotion, skonto, discountCalculationMethod, productType
                 headers = new String[]{
+                    "Lp",                              // displayOrder (liczba porządkowa)
                     "Nazwa",                           // name
                     "Cena katalogowa",                 // unitDetalP
                     "Przelicznik",                     // quantityCo
@@ -165,39 +249,45 @@ public class ProductExportService {
                 Row row = sheet.createRow(rowNum++);
                 int colIndex = 0;
                 
-                // name (kolumna 0)
+                // Lp (kolumna 0) - displayOrder + 1 (dla użytkownika: 1, 2, 3, ... zamiast 0, 1, 2, ...)
+                // ⚠️ WAŻNE: Używamy integerStyle (format "0") zamiast numberStyle (format "#,##0.00")
+                // aby liczba porządkowa była zawsze wyświetlana jako integer bez przecinka
+                Integer displayOrder = product.getDisplayOrder() != null ? product.getDisplayOrder() : 0;
+                createNumericCell(row, colIndex++, (double)(displayOrder + 1), integerStyle);
+                
+                // name (kolumna 1)
                 createCell(row, colIndex++, product.getName(), cellStyle);
                 
-                // Cena katalogowa (kolumna 1)
+                // Cena katalogowa (kolumna 2)
                 createNumericCell(row, colIndex++, product.getRetailPrice(), numberStyle);
                 
                 if (category == ProductCategory.ACCESSORY) {
-                    // AKCESORIA: unit (kolumna 2)
+                    // AKCESORIA: unit (kolumna 3)
                     createCell(row, colIndex++, product.getUnit(), cellStyle);
                 } else {
-                    // DACHÓWKI I RYNNY: quantityCo (kolumna 2)
+                    // DACHÓWKI I RYNNY: quantityCo (kolumna 3)
                     createNumericCell(row, colIndex++, product.getQuantityConverter(), numberStyle);
                 }
                 
-                // Rabaty (kolumny 3-5)
+                // Rabaty (kolumny 4-6)
                 createNumericCell(row, colIndex++, product.getBasicDiscount() != null ? product.getBasicDiscount().doubleValue() : 0.0, numberStyle);
                 createNumericCell(row, colIndex++, product.getAdditionalDiscount() != null ? product.getAdditionalDiscount().doubleValue() : 0.0, numberStyle);
                 createNumericCell(row, colIndex++, product.getPromotionDiscount() != null ? product.getPromotionDiscount().doubleValue() : 0.0, numberStyle);
                 
-                // skonto (kolumna 6)
+                // skonto (kolumna 7)
                 createNumericCell(row, colIndex++, product.getSkontoDiscount() != null ? product.getSkontoDiscount().doubleValue() : 0.0, numberStyle);
                 
-                // Sposób obliczania rabatu (kolumna 7)
+                // Sposób obliczania rabatu (kolumna 8)
                 String methodValue = product.getDiscountCalculationMethod() != null 
                     ? product.getDiscountCalculationMethod().name() 
                     : "";
                 createCell(row, colIndex++, methodValue, cellStyle);
                 
                 if (category == ProductCategory.ACCESSORY) {
-                    // Typ (kolumna 8) - tylko dla akcesoriów
+                    // Typ (kolumna 9) - tylko dla akcesoriów
                     createCell(row, colIndex++, product.getAccessoryType(), cellStyle);
                 } else {
-                    // Typ produktu (kolumna 8) - dla dachówek i rynien
+                    // Typ produktu (kolumna 9) - dla dachówek i rynien
                     createCell(row, colIndex++, product.getProductType(), cellStyle);
                 }
             }
@@ -234,6 +324,52 @@ public class ProductExportService {
             cell.setCellValue(0.0);
         }
         cell.setCellStyle(style);
+    }
+
+    /**
+     * Usuń nieprawidłowe znaki z nazwy pliku
+     * Windows nie pozwala na: < > : " / \ | ? *
+     * ⚠️ WAŻNE: NIE zamieniaj myślników "-" - są one częścią formatu "Manufacturer-GroupName.xlsx"
+     * ⚠️ WAŻNE: NIE zamieniaj spacji - mogą być w groupName (np. "czarna ang NUANE")
+     */
+    private String sanitizeFileName(String fileName) {
+        if (fileName == null) {
+            return "unnamed.xlsx";
+        }
+        
+        // Zamień tylko nieprawidłowe znaki Windows na podkreślenia
+        // NIE zamieniaj myślników "-" ani spacji " " - są one częścią formatu nazwy pliku
+        String sanitized = fileName
+            .replace("<", "_")
+            .replace(">", "_")
+            .replace(":", "_")
+            .replace("\"", "_")
+            .replace("/", "_")
+            .replace("\\", "_")
+            .replace("|", "_")
+            .replace("?", "_")
+            .replace("*", "_");
+        
+        // Usuń wielokrotne podkreślenia (ale nie myślniki ani spacje)
+        while (sanitized.contains("__")) {
+            sanitized = sanitized.replace("__", "_");
+        }
+        
+        // Usuń podkreślenia na początku i końcu (ale nie myślniki ani spacje)
+        sanitized = sanitized.trim();
+        while (sanitized.startsWith("_")) {
+            sanitized = sanitized.substring(1);
+        }
+        while (sanitized.endsWith("_")) {
+            sanitized = sanitized.substring(0, sanitized.length() - 1);
+        }
+        
+        // Jeśli nazwa jest pusta, użyj domyślnej
+        if (sanitized.isEmpty() || sanitized.equals(".xlsx")) {
+            sanitized = "unnamed.xlsx";
+        }
+        
+        return sanitized;
     }
 }
 

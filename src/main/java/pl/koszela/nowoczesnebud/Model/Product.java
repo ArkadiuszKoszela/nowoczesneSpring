@@ -40,8 +40,7 @@ public class Product {
     private String groupName;
 
     // === CENNIK ===
-    @ExcelCell(1)
-    @ExcelCellName("unitDetalP")  // Stara nazwa dla kompatybilności z importem
+    @ExcelCellName("unitDetalP")  // Mapowanie po nazwie kolumny (nie po pozycji - eksport ma kolumnę "Lp" na pozycji 0)
     private Double retailPrice = 0.00;
 
     @ExcelCellName("cena zakupu")
@@ -53,8 +52,7 @@ public class Product {
     @ExcelCellName("unit")
     private String unit;
 
-    @ExcelCell(2)
-    @ExcelCellName("quantityCo")  // Stara nazwa dla kompatybilności z importem
+    @ExcelCellName("quantityCo")  // Mapowanie po nazwie kolumny (nie po pozycji - eksport ma kolumnę "Lp" na pozycji 0)
     private Double quantityConverter = 1.0;
 
     private Double quantity = 0.00;
@@ -111,6 +109,11 @@ public class Product {
     @Column(name = "product_type")
     @ExcelCellName("productType")
     private String productType;
+
+    // === KOLEJNOŚĆ WYŚWIETLANIA ===
+    @Column(name = "display_order")
+    @ExcelCellName("Lp")  // Kolumna z liczbą porządkową w Excelu
+    private Integer displayOrder = 0;  // Kolejność w obrębie grupy (manufacturer + groupName)
 
     // === RABATY GLOBALNE (nie zapisywane w bazie - wypełniane dynamicznie) ===
     @Transient

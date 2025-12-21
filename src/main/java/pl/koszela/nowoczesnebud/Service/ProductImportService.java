@@ -131,18 +131,19 @@ public class ProductImportService {
             String finalGroupName;
             if (customGroupNameFromParam != null && !customGroupNameFromParam.trim().isEmpty()) {
                 // Frontend przesłał wartość w groupName[] - użyj jej BEZPOŚREDNIO (z sugestii)
+                // ⚠️ WAŻNE: groupName[] jest już poprawnie wyciągnięte z nazwy pliku przez frontend,
+                // więc używamy go bezpośrednio bez dodatkowego parsowania
+                // ⚠️ ZMIANA: NIE tworzymy kombinacji z name[], bo groupName[] jest już poprawne
+                // Kombinacja była potrzebna tylko gdy użytkownik RZECZYWIŚCIE zmienił "Nazwa produktu w systemie"
+                // ale w przypadku importu z pliku, name[] zawiera całą nazwę pliku (z producentem),
+                // więc nie powinniśmy tworzyć kombinacji
                 finalGroupName = customGroupNameFromParam.trim();
-                
-                // ⚠️ NOWA LOGIKA: Jeśli customGroupName (name[]) jest różne od customGroupNameFromParam (groupName[]),
-                // to dodajemy customGroupName do finalGroupName, aby "Nazwa produktu w systemie" była częścią identyfikatora
-                if (customGroupName != null && !customGroupName.trim().isEmpty() && 
-                    !customGroupName.trim().equals(customGroupNameFromParam.trim())) {
-                    // Użytkownik zmienił "Nazwa produktu w systemie" - użyj kombinacji jako identyfikatora
-                    finalGroupName = customGroupNameFromParam.trim() + " | " + customGroupName.trim();
-                }
+                logger.debug("🔍 Używam groupName[] bezpośrednio: '{}' (bez kombinacji z name[])", finalGroupName);
             } else if (customGroupName != null && !customGroupName.trim().isEmpty()) {
-                // Frontend przesłał wartość w name[] - użyj jej (fallback jeśli groupName[] jest puste)
-                finalGroupName = customGroupName.trim();
+                // Frontend przesłał wartość w name[] - wyciągnij z niej tylko część grupy (bez producenta)
+                finalGroupName = extractGroupNameFromCustomName(customGroupName.trim(), manufacturer);
+                logger.debug("🔍 groupName[] puste, używam wyciągniętego z name[]: '{}' → '{}'", 
+                            customGroupName, finalGroupName);
             } else {
                 // Frontend nie przesłał wartości - to nie powinno się zdarzyć (walidacja w frontendzie)
                 // Fallback tylko dla bezpieczeństwa
@@ -151,10 +152,16 @@ public class ProductImportService {
             }
             
             // 5. Przetwarzanie produktów (ustawianie manufacturer, groupName, kalkulacje cen)
+            // Mapowanie produktów do grup dla ustawienia displayOrder
+            Map<String, List<Product>> productsByGroup = new HashMap<>();
             for (Product product : productsFromFile) {
                 product.setManufacturer(manufacturer);
                 product.setGroupName(finalGroupName);
                 product.setCategory(category);
+                
+                // Grupuj produkty po manufacturer + groupName (dla ustawienia displayOrder w obrębie grupy)
+                String groupKey = manufacturer + "|" + finalGroupName;
+                productsByGroup.computeIfAbsent(groupKey, k -> new ArrayList<>()).add(product);
                 
                 // ⭐ AUTOMATYCZNE MAPOWANIE NAZWY → mapperName
                 // Jeśli Excel nie ma kolumny mapperName, generujemy z nazwy produktu
@@ -170,6 +177,9 @@ public class ProductImportService {
                 if (product.getAccessoryType() != null && product.getAccessoryType().trim().isEmpty()) {
                     product.setAccessoryType(null);
                 }
+                
+                // ⚠️ WAŻNE: Logika domyślna dla productType jest przeniesiona do fillDiscountsFromExcel
+                // aby była uruchamiana PO odczytaniu productType z Excel (jeśli Excel ma kolumnę "Typ produktu")
 
                 // DOKŁADNIE TA SAMA LOGIKA KALKULACJI co w CsvImporterImplTile
                 if (product.getRetailPrice() != 0.00 && product.getPurchasePrice() != 0.00) {
@@ -199,6 +209,57 @@ public class ProductImportService {
                         product.setSellingPrice(product.getRetailPrice());
                     }
                 }
+            }
+            
+            // 6. Ustaw displayOrder dla produktów zgodnie z kolejnością wierszy w Excelu
+            // ⚠️ WAŻNE: displayOrder powinno być ustawione zgodnie z kolejnością wierszy w Excelu (0, 1, 2, ...)
+            // Jeśli Excel ma kolumnę "Lp", Poiji już ustawiła wartość (dzięki @ExcelCellName("Lp"))
+            // Jeśli nie ma lub wartość jest null, ustawiamy na podstawie indeksu w productsFromFile (kolejność w Excelu)
+            for (int excelRowIndex = 0; excelRowIndex < productsFromFile.size(); excelRowIndex++) {
+                Product product = productsFromFile.get(excelRowIndex);
+                
+                // Jeśli produkt nie ma displayOrder (null) lub ma 0, ustaw na podstawie kolejności w Excelu
+                if (product.getDisplayOrder() == null) {
+                    // Excel nie ma kolumny "Lp" lub wartość jest pusta - ustaw zgodnie z kolejnością wierszy
+                    product.setDisplayOrder(excelRowIndex);
+                    logger.debug("🔢 Ustawiono displayOrder dla produktu '{}' na {} (kolejność w Excelu)", 
+                                product.getName(), excelRowIndex);
+                } else {
+                    // Excel ma kolumnę "Lp" - normalizuj wartość (zaczynając od 0)
+                    // Jeśli wartość jest już znormalizowana (>= 0), zostaw bez zmian
+                    // Jeśli wartość jest ujemna lub bardzo duża, znormalizuj
+                    int displayOrder = product.getDisplayOrder();
+                    if (displayOrder < 0) {
+                        // Wartość ujemna - znormalizuj do 0, 1, 2, ...
+                        product.setDisplayOrder(excelRowIndex);
+                        logger.debug("🔢 Znormalizowano displayOrder dla produktu '{}' z {} na {} (wartość ujemna)", 
+                                    product.getName(), displayOrder, excelRowIndex);
+                    }
+                    // Jeśli displayOrder >= 0, zostaw bez zmian (Excel już ma poprawną wartość)
+                }
+            }
+            
+            // 7. Normalizuj displayOrder w obrębie każdej grupy (zaczynając od 0 dla każdej grupy)
+            // ⚠️ WAŻNE: Produkty w różnych grupach mogą mieć takie same displayOrder (np. obie grupy zaczynają od 0)
+            // Normalizujemy displayOrder w obrębie każdej grupy osobno, zachowując kolejność z Excela
+            for (Map.Entry<String, List<Product>> entry : productsByGroup.entrySet()) {
+                List<Product> groupProducts = entry.getValue();
+                
+                // Sortuj produkty po kolejności w Excelu (indeks w productsFromFile)
+                // To zachowa oryginalną kolejność wierszy z Excela
+                groupProducts.sort((p1, p2) -> {
+                    int index1 = productsFromFile.indexOf(p1);
+                    int index2 = productsFromFile.indexOf(p2);
+                    return Integer.compare(index1, index2);
+                });
+                
+                // Znormalizuj displayOrder w obrębie grupy (0, 1, 2, ...) zgodnie z kolejnością z Excela
+                for (int j = 0; j < groupProducts.size(); j++) {
+                    groupProducts.get(j).setDisplayOrder(j);
+                }
+                
+                logger.debug("🔢 Znormalizowano displayOrder dla grupy '{}': {} produktów (0, 1, 2, ...) zgodnie z kolejnością z Excela", 
+                            entry.getKey(), groupProducts.size());
             }
             
             allProducts.addAll(productsFromFile);
@@ -253,6 +314,62 @@ public class ProductImportService {
         // Zamień myślniki na spacje dla czytelności
         String groupName = parts[1].replace("-", " ").trim();
         
+        return groupName;
+    }
+    
+    /**
+     * Wyciąga tylko nazwę grupy z "Nazwa produktu w systemie" (customGroupName/name[]).
+     * Jeśli customGroupName zawiera producenta (np. "BORHOLM-czerwień naturalna"),
+     * to wyciąga tylko część grupy (np. "czerwień naturalna").
+     * 
+     * Przykłady:
+     * "BORHOLM-czerwień naturalna" + manufacturer="BORHOLM" -> "czerwień naturalna"
+     * "czerwień naturalna" + manufacturer="BORHOLM" -> "czerwień naturalna" (już bez producenta)
+     * "CANTUS łupek ang-NUANE" + manufacturer="CANTUS" -> "łupek ang NUANE"
+     */
+    private String extractGroupNameFromCustomName(String customGroupName, String manufacturer) {
+        if (customGroupName == null || customGroupName.trim().isEmpty()) {
+            return customGroupName;
+        }
+        
+        String trimmed = customGroupName.trim();
+        
+        // Jeśli customGroupName zaczyna się od producenta (z spacją lub myślnikiem),
+        // to wyciągnij tylko część po producencie
+        if (manufacturer != null && !manufacturer.trim().isEmpty()) {
+            String manufacturerTrimmed = manufacturer.trim();
+            
+            // Sprawdź czy customGroupName zaczyna się od producenta
+            if (trimmed.startsWith(manufacturerTrimmed)) {
+                // Usuń producenta z początku (z spacją lub myślnikiem)
+                String withoutManufacturer = trimmed.substring(manufacturerTrimmed.length()).trim();
+                
+                // Jeśli po producencie jest separator (spacja lub myślnik), usuń go
+                if (withoutManufacturer.startsWith("-") || withoutManufacturer.startsWith(" ")) {
+                    withoutManufacturer = withoutManufacturer.substring(1).trim();
+                }
+                
+                // Zamień myślniki na spacje dla czytelności
+                String result = withoutManufacturer.replace("-", " ").trim();
+                logger.debug("🔍 extractGroupNameFromCustomName: '{}' + manufacturer='{}' → '{}'", 
+                            customGroupName, manufacturer, result);
+                return result;
+            }
+        }
+        
+        // Jeśli nie zaczyna się od producenta, użyj tej samej logiki co extractGroupNameFromFileName
+        // (wyciągnij wszystko po pierwszym słowie)
+        String[] parts = trimmed.split("[\\s-]", 2);
+        if (parts.length < 2) {
+            logger.debug("🔍 extractGroupNameFromCustomName: '{}' → '{}' (brak separatora)", 
+                        customGroupName, trimmed);
+            return trimmed; // Jeśli nie ma spacji/myślnika, zwróć całość
+        }
+        
+        // Wszystko poza pierwszym słowem = grupa produktowa
+        String groupName = parts[1].replace("-", " ").trim();
+        logger.debug("🔍 extractGroupNameFromCustomName: '{}' → '{}' (split po pierwszym słowie)", 
+                    customGroupName, groupName);
         return groupName;
     }
 
@@ -555,7 +672,8 @@ public class ProductImportService {
                         skontoIndex = i;
                     } else if (headerName.equals("discountCalculationMethod")) {
                         discountCalculationMethodIndex = i;
-                    } else if (headerName.equals("productType")) {
+                    } else if (headerName.equals("productType") || headerName.equals("Typ produktu")) {
+                        // Sprawdź zarówno "productType" (po mapowaniu) jak i "Typ produktu" (oryginalna nazwa)
                         productTypeIndex = i;
                     }
                 }
@@ -701,8 +819,24 @@ public class ProductImportService {
                             product.setProductType(productTypeValue);
                         }
                     } else {
-                        // Komórka jest pusta - ustaw null
+                        // Komórka jest pusta - ustaw null (zachowaj null, nie ustawiaj domyślnej wartości)
                         product.setProductType(null);
+                    }
+                } else {
+                    // ⚠️ WAŻNE: Excel NIE MA kolumny "Typ produktu" - ustaw domyślny productType
+                    // Tylko w tym przypadku ustawiamy domyślną wartość
+                    if (product.getProductType() == null || product.getProductType().trim().isEmpty()) {
+                        String productName = product.getName() != null ? product.getName().trim() : "";
+                        
+                        if ("Dachówka podstawowa".equals(productName)) {
+                            // Jeśli nazwa to dokładnie "Dachówka podstawowa", ustaw productType na "Dachówka podstawowa"
+                            product.setProductType("Dachówka podstawowa");
+                            logger.debug("🔧 Ustawiono domyślny productType 'Dachówka podstawowa' dla produktu '{}' (Excel nie ma kolumny 'Typ produktu')", productName);
+                        } else {
+                            // W przeciwnym razie ustaw domyślnie "Akcesoria ceramiczne"
+                            product.setProductType("Akcesoria ceramiczne");
+                            logger.debug("🔧 Ustawiono domyślny productType 'Akcesoria ceramiczne' dla produktu '{}' (Excel nie ma kolumny 'Typ produktu')", productName);
+                        }
                     }
                 }
             }

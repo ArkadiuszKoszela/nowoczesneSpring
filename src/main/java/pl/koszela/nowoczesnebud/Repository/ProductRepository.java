@@ -12,7 +12,12 @@ import java.util.List;
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
-    List<Product> findByCategory(ProductCategory category);
+    /**
+     * Znajdź wszystkie produkty danej kategorii posortowane po displayOrder
+     * Sortowanie: najpierw po manufacturer, potem po groupName, na końcu po displayOrder
+     */
+    @Query("SELECT p FROM Product p WHERE p.category = :category ORDER BY p.manufacturer, p.groupName, p.displayOrder")
+    List<Product> findByCategory(@Param("category") ProductCategory category);
 
     List<Product> findByCategoryAndManufacturer(ProductCategory category, String manufacturer);
 
@@ -25,6 +30,13 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     
     @Query("SELECT DISTINCT p.groupName FROM Product p WHERE p.category = :category AND p.manufacturer = :manufacturer")
     List<String> findDistinctGroupNamesByCategoryAndManufacturer(@Param("category") ProductCategory category, @Param("manufacturer") String manufacturer);
+    
+    /**
+     * Znajdź wszystkie produkty danej kategorii posortowane po displayOrder
+     * Sortowanie: najpierw po manufacturer, potem po groupName, na końcu po displayOrder
+     */
+    @Query("SELECT p FROM Product p WHERE p.category = :category ORDER BY p.manufacturer, p.groupName, p.displayOrder")
+    List<Product> findByCategoryOrderByDisplayOrder(@Param("category") ProductCategory category);
 }
 
 

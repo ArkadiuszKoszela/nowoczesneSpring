@@ -146,8 +146,8 @@ public class ProductService {
                     "selling_price, unit, quantity_converter, quantity, mapper_name, discount, " +
                     "discount_calculation_method, basic_discount, promotion_discount, " +
                     "additional_discount, skonto_discount, margin_percent, accessory_type, " +
-                    "product_type, created_at, updated_at) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    "product_type, display_order, created_at, updated_at) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         int batchSize = 1000;
         int totalBatches = (int)Math.ceil((double)totalProducts / batchSize);
@@ -194,6 +194,7 @@ public class ProductService {
                             pstmt.setObject(paramIndex++, product.getMarginPercent());
                             pstmt.setString(paramIndex++, product.getAccessoryType());
                             pstmt.setString(paramIndex++, product.getProductType());
+                            pstmt.setObject(paramIndex++, product.getDisplayOrder()); // display_order
                             pstmt.setTimestamp(paramIndex++, now);
                             pstmt.setTimestamp(paramIndex++, now);
                             
@@ -859,10 +860,427 @@ public class ProductService {
     }
 
     /**
+     * Zmień kolejność produktów (drag & drop)
+     * Aktualizuje displayOrder dla produktów w podanej kolejności (0, 1, 2, ...)
+     * 
+     * @param productIds Lista ID produktów w nowej kolejności
+     * @param category Kategoria produktów
+     * @param manufacturer Producent
+     * @param groupName Nazwa grupy produktowej
+     */
+    @Transactional
+    public void reorderProducts(List<Long> productIds, ProductCategory category, 
+                               String manufacturer, String groupName) {
+        logger.info("🔄 Zmiana kolejności produktów: {} / {} / {} ({} produktów)", 
+                   category, manufacturer, groupName, productIds.size());
+        
+        if (productIds == null || productIds.isEmpty()) {
+            throw new IllegalArgumentException("Lista ID produktów nie może być pusta");
+        }
+        
+        // Pobierz wszystkie produkty z grupy, aby sprawdzić czy wszystkie ID są poprawne
+        List<Product> groupProducts = productRepository.findByCategoryAndManufacturer(category, manufacturer)
+            .stream()
+            .filter(p -> p.getGroupName() != null && p.getGroupName().equals(groupName))
+            .collect(Collectors.toList());
+        
+        // Sprawdź czy wszystkie ID z requestu istnieją w grupie
+        Set<Long> groupProductIds = groupProducts.stream()
+            .map(Product::getId)
+            .collect(Collectors.toSet());
+        
+        for (Long productId : productIds) {
+            if (!groupProductIds.contains(productId)) {
+                throw new IllegalArgumentException(
+                    String.format("Produkt o ID %d nie istnieje w grupie %s / %s / %s", 
+                                productId, category, manufacturer, groupName));
+            }
+        }
+        
+        // Aktualizuj displayOrder dla każdego produktu w podanej kolejności
+        for (int i = 0; i < productIds.size(); i++) {
+            Long productId = productIds.get(i);
+            Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new IllegalArgumentException("Produkt o ID " + productId + " nie został znaleziony"));
+            
+            // Sprawdź czy produkt należy do właściwej grupy
+            if (!product.getCategory().equals(category) || 
+                !product.getManufacturer().equals(manufacturer) || 
+                !product.getGroupName().equals(groupName)) {
+                throw new IllegalArgumentException(
+                    String.format("Produkt o ID %d nie należy do grupy %s / %s / %s", 
+                                productId, category, manufacturer, groupName));
+            }
+            
+            product.setDisplayOrder(i);
+            productRepository.save(product);
+            
+            logger.debug("  Produkt ID {} → displayOrder = {}", productId, i);
+        }
+        
+        logger.info("✅ Kolejność produktów zaktualizowana pomyślnie");
+    }
+
+    /**
      * Pobierz produkt po ID
      */
     public Optional<Product> getProductById(Long id) {
         return productRepository.findById(id);
+    }
+
+    /**
+     * Pobierz wszystkie produkty z danej grupy posortowane po displayOrder
+     * 
+     * ⚠️ WAŻNE: Wymuszamy flush() przed zapytaniem, aby mieć pewność że wszystkie zmiany są zapisane,
+     * a następnie pobieramy dane z bazy (nie z cache), aby zawsze zwracać aktualne wartości displayOrder.
+     */
+    public List<Product> getProductsByGroup(ProductCategory category, String manufacturer, String groupName) {
+        // Wymuś zapis wszystkich oczekujących zmian
+        entityManager.flush();
+        
+        // Pobierz produkty z bazy (zaktualizowane)
+        return productRepository.findByCategoryAndManufacturer(category, manufacturer)
+            .stream()
+            .filter(p -> p.getGroupName() != null && p.getGroupName().equals(groupName))
+            .sorted((p1, p2) -> {
+                Integer order1 = p1.getDisplayOrder() != null ? p1.getDisplayOrder() : 0;
+                Integer order2 = p2.getDisplayOrder() != null ? p2.getDisplayOrder() : 0;
+                return order1.compareTo(order2);
+            })
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * Przesuń produkt o jedną pozycję w górę (zmniejsz displayOrder)
+     * 
+     * @param productId ID produktu do przesunięcia
+     * @return true jeśli przesunięcie się powiodło, false jeśli produkt jest już na pierwszej pozycji
+     */
+    @Transactional
+    public boolean moveProductUp(Long productId) {
+        Product product = productRepository.findById(productId)
+            .orElseThrow(() -> new IllegalArgumentException("Produkt o ID " + productId + " nie został znaleziony"));
+        
+        return moveProductUp(product);
+    }
+
+    /**
+     * Przesuń produkt o jedną pozycję w górę (zmniejsz displayOrder)
+     * 
+     * ⚠️ NOWE PODEJŚCIE: 
+     * 1. Używamy natywnego SQL do pobrania aktualnego displayOrder (omija cache Hibernate)
+     * 2. Używamy natywnego SQL UPDATE do zapisania zmian (omija cache Hibernate)
+     * 3. To zapewnia, że zawsze mamy aktualne dane z bazy i możemy bezpiecznie używać tej metody w pętlach
+     * 
+     * 💡 IDEALNE DO FRONTENDU: Ta metoda może być wywoływana wielokrotnie w pętli (np. "przesuń na górę" 5 razy)
+     * i zawsze będzie działać poprawnie, bo każdy wywołanie pobiera aktualne dane z bazy.
+     */
+    @Transactional
+    public boolean moveProductUp(Product product) {
+        if (product.getCategory() == null || product.getManufacturer() == null || product.getGroupName() == null) {
+            throw new IllegalArgumentException("Produkt musi mieć ustawione: category, manufacturer, groupName");
+        }
+
+        // Wymuś zapis wszystkich oczekujących zmian przed sprawdzeniem
+        entityManager.flush();
+
+        // ⚠️ KROK 1: Pobierz aktualny displayOrder produktu bezpośrednio z bazy używając natywnego SQL
+        // To omija cache Hibernate i zawsze zwraca aktualne dane z bazy
+        Integer currentOrder = ((Number) entityManager.createNativeQuery(
+            "SELECT COALESCE(display_order, 0) FROM products WHERE id = :id")
+            .setParameter("id", product.getId())
+            .getSingleResult()).intValue();
+        
+        logger.debug("🔍 moveProductUp: Produkt ID {} ma currentOrder = {}", product.getId(), currentOrder);
+        
+        // ⚠️ KROK 2: Jeśli produkt jest już na pierwszej pozycji (0), nie można go przesunąć wyżej
+        if (currentOrder == 0) {
+            logger.debug("🔍 moveProductUp: Produkt ID {} jest już na pierwszej pozycji - zwracam false", product.getId());
+            return false;
+        }
+        
+        // ⚠️ KROK 3: Znajdź produkt z największym displayOrder, który jest mniejszy niż currentOrder
+        // Używamy JPQL, ale z flush() przed zapytaniem, aby mieć aktualne dane
+        @SuppressWarnings("unchecked")
+        List<Object[]> results = entityManager.createQuery(
+            "SELECT p.id, COALESCE(p.displayOrder, 0) FROM Product p " +
+            "WHERE p.category = :category AND p.manufacturer = :manufacturer AND p.groupName = :groupName " +
+            "AND COALESCE(p.displayOrder, 0) < :currentOrder " +
+            "AND COALESCE(p.displayOrder, 0) >= 0 " +
+            "AND p.id != :productId " +
+            "ORDER BY COALESCE(p.displayOrder, 0) DESC")
+            .setParameter("category", product.getCategory())
+            .setParameter("manufacturer", product.getManufacturer())
+            .setParameter("groupName", product.getGroupName())
+            .setParameter("currentOrder", currentOrder)
+            .setParameter("productId", product.getId())
+            .setMaxResults(1)
+            .getResultList();
+        
+        if (results.isEmpty()) {
+            logger.debug("🔍 moveProductUp: Produkt ID {} jest już na pierwszej pozycji (brak produktu powyżej) - zwracam false", product.getId());
+            return false;
+        }
+        
+        // ⚠️ KROK 4: Znajdź produkt powyżej
+        Long aboveProductId = (Long) results.get(0)[0];
+        Integer aboveOrder = ((Number) results.get(0)[1]).intValue();
+        
+        logger.debug("🔍 moveProductUp: Znaleziono produkt powyżej: ID = {}, displayOrder = {}", aboveProductId, aboveOrder);
+        
+        // ⚠️ KROK 5: Zamień miejscami displayOrder używając natywnego SQL UPDATE
+        // To zapewnia, że zmiany są zapisywane bezpośrednio do bazy, omijając cache Hibernate
+        int updated1 = entityManager.createNativeQuery(
+            "UPDATE products SET display_order = :newOrder WHERE id = :id")
+            .setParameter("newOrder", aboveOrder)
+            .setParameter("id", product.getId())
+            .executeUpdate();
+        
+        int updated2 = entityManager.createNativeQuery(
+            "UPDATE products SET display_order = :newOrder WHERE id = :id")
+            .setParameter("newOrder", currentOrder)
+            .setParameter("id", aboveProductId)
+            .executeUpdate();
+        
+        if (updated1 != 1 || updated2 != 1) {
+            logger.error("⚠️ BŁĄD: Nie udało się zaktualizować displayOrder. updated1={}, updated2={}", updated1, updated2);
+            throw new IllegalStateException("Nie udało się zaktualizować displayOrder produktów");
+        }
+        
+        // Wymuś zapis do bazy
+        entityManager.flush();
+        
+        // ⚠️ WAŻNE: Wyczyść cache Hibernate, aby następne zapytania zwróciły aktualne dane z bazy
+        // To jest kluczowe, bo zapisaliśmy zmiany przez natywny SQL UPDATE, który omija cache
+        entityManager.clear();
+        
+        logger.info("✅ Produkt ID {} przesunięty w górę: {} → {}", product.getId(), currentOrder, aboveOrder);
+        return true;
+    }
+
+    /**
+     * Przesuń produkt o jedną pozycję w dół (zwiększ displayOrder)
+     * 
+     * @param productId ID produktu do przesunięcia
+     * @return true jeśli przesunięcie się powiodło, false jeśli produkt jest już na ostatniej pozycji
+     */
+    @Transactional
+    public boolean moveProductDown(Long productId) {
+        Product product = productRepository.findById(productId)
+            .orElseThrow(() -> new IllegalArgumentException("Produkt o ID " + productId + " nie został znaleziony"));
+        
+        return moveProductDown(product);
+    }
+
+    /**
+     * Przesuń produkt o jedną pozycję w dół (zwiększ displayOrder)
+     * 
+     * ⚠️ NOWE PODEJŚCIE: 
+     * 1. Używamy natywnego SQL do pobrania aktualnego displayOrder (omija cache Hibernate)
+     * 2. Używamy natywnego SQL UPDATE do zapisania zmian (omija cache Hibernate)
+     * 3. To zapewnia, że zawsze mamy aktualne dane z bazy i możemy bezpiecznie używać tej metody w pętlach
+     * 
+     * 💡 IDEALNE DO FRONTENDU: Ta metoda może być wywoływana wielokrotnie w pętli (np. "przesuń na dół" 5 razy)
+     * i zawsze będzie działać poprawnie, bo każdy wywołanie pobiera aktualne dane z bazy.
+     */
+    @Transactional
+    public boolean moveProductDown(Product product) {
+        if (product.getCategory() == null || product.getManufacturer() == null || product.getGroupName() == null) {
+            throw new IllegalArgumentException("Produkt musi mieć ustawione: category, manufacturer, groupName");
+        }
+
+        // Wymuś zapis wszystkich oczekujących zmian przed sprawdzeniem
+        entityManager.flush();
+
+        // ⚠️ KROK 1: Pobierz aktualny displayOrder produktu bezpośrednio z bazy używając natywnego SQL
+        Integer currentOrder = ((Number) entityManager.createNativeQuery(
+            "SELECT COALESCE(display_order, 0) FROM products WHERE id = :id")
+            .setParameter("id", product.getId())
+            .getSingleResult()).intValue();
+        
+        logger.debug("🔍 moveProductDown: Produkt ID {} ma currentOrder = {}", product.getId(), currentOrder);
+        
+        // ⚠️ KROK 2: Sprawdź ile produktów jest w grupie
+        Long groupSize = (Long) entityManager.createQuery(
+            "SELECT COUNT(p) FROM Product p " +
+            "WHERE p.category = :category AND p.manufacturer = :manufacturer AND p.groupName = :groupName")
+            .setParameter("category", product.getCategory())
+            .setParameter("manufacturer", product.getManufacturer())
+            .setParameter("groupName", product.getGroupName())
+            .getSingleResult();
+        
+        if (groupSize <= 1) {
+            logger.debug("🔍 moveProductDown: Grupa ma tylko jeden produkt - zwracam false");
+            return false;
+        }
+        
+        int lastPosition = groupSize.intValue() - 1;
+        
+        // ⚠️ KROK 3: Jeśli produkt jest już na ostatniej pozycji, nie można go przesunąć niżej
+        if (currentOrder >= lastPosition) {
+            logger.debug("🔍 moveProductDown: Produkt ID {} jest już na ostatniej pozycji ({}) - zwracam false", product.getId(), currentOrder);
+            return false;
+        }
+        
+        // ⚠️ KROK 4: Znajdź produkt z najmniejszym displayOrder, który jest większy niż currentOrder
+        // Używamy JPQL, ale z flush() przed zapytaniem, aby mieć aktualne dane
+        @SuppressWarnings("unchecked")
+        List<Object[]> results = entityManager.createQuery(
+            "SELECT p.id, COALESCE(p.displayOrder, 0) FROM Product p " +
+            "WHERE p.category = :category AND p.manufacturer = :manufacturer AND p.groupName = :groupName " +
+            "AND COALESCE(p.displayOrder, 0) > :currentOrder " +
+            "AND p.id != :productId " +
+            "ORDER BY COALESCE(p.displayOrder, 0) ASC")
+            .setParameter("category", product.getCategory())
+            .setParameter("manufacturer", product.getManufacturer())
+            .setParameter("groupName", product.getGroupName())
+            .setParameter("currentOrder", currentOrder)
+            .setParameter("productId", product.getId())
+            .setMaxResults(1)
+            .getResultList();
+        
+        if (results.isEmpty()) {
+            logger.debug("🔍 moveProductDown: Produkt ID {} jest już na ostatniej pozycji (brak produktu poniżej) - zwracam false", product.getId());
+            return false;
+        }
+        
+        // ⚠️ KROK 5: Znajdź produkt poniżej
+        Long belowProductId = (Long) results.get(0)[0];
+        Integer belowOrder = ((Number) results.get(0)[1]).intValue();
+        
+        logger.debug("🔍 moveProductDown: Znaleziono produkt poniżej: ID = {}, displayOrder = {}", belowProductId, belowOrder);
+        
+        // ⚠️ KROK 6: Zamień miejscami displayOrder używając natywnego SQL UPDATE
+        int updated1 = entityManager.createNativeQuery(
+            "UPDATE products SET display_order = :newOrder WHERE id = :id")
+            .setParameter("newOrder", belowOrder)
+            .setParameter("id", product.getId())
+            .executeUpdate();
+        
+        int updated2 = entityManager.createNativeQuery(
+            "UPDATE products SET display_order = :newOrder WHERE id = :id")
+            .setParameter("newOrder", currentOrder)
+            .setParameter("id", belowProductId)
+            .executeUpdate();
+        
+        if (updated1 != 1 || updated2 != 1) {
+            logger.error("⚠️ BŁĄD: Nie udało się zaktualizować displayOrder. updated1={}, updated2={}", updated1, updated2);
+            throw new IllegalStateException("Nie udało się zaktualizować displayOrder produktów");
+        }
+        
+        // Wymuś zapis do bazy
+        entityManager.flush();
+        
+        // ⚠️ WAŻNE: Wyczyść cache Hibernate, aby następne zapytania zwróciły aktualne dane z bazy
+        // To jest kluczowe, bo zapisaliśmy zmiany przez natywny SQL UPDATE, który omija cache
+        entityManager.clear();
+        
+        logger.info("✅ Produkt ID {} przesunięty w dół: {} → {}", product.getId(), currentOrder, belowOrder);
+        return true;
+    }
+
+    /**
+     * Przesuń produkt na konkretną pozycję (0 = pierwsza pozycja)
+     * 
+     * @param productId ID produktu do przesunięcia
+     * @param targetPosition Docelowa pozycja (0-based)
+     * @return true jeśli przesunięcie się powiodło
+     */
+    @Transactional
+    public boolean moveProductToPosition(Long productId, int targetPosition) {
+        Product product = productRepository.findById(productId)
+            .orElseThrow(() -> new IllegalArgumentException("Produkt o ID " + productId + " nie został znaleziony"));
+        
+        return moveProductToPosition(product, targetPosition);
+    }
+
+    /**
+     * Przesuń produkt na konkretną pozycję (0 = pierwsza pozycja)
+     */
+    @Transactional
+    public boolean moveProductToPosition(Product product, int targetPosition) {
+        if (product.getCategory() == null || product.getManufacturer() == null || product.getGroupName() == null) {
+            throw new IllegalArgumentException("Produkt musi mieć ustawione: category, manufacturer, groupName");
+        }
+
+        if (targetPosition < 0) {
+            throw new IllegalArgumentException("Pozycja nie może być ujemna: " + targetPosition);
+        }
+
+        List<Product> groupProducts = getProductsByGroup(
+            product.getCategory(), 
+            product.getManufacturer(), 
+            product.getGroupName()
+        );
+
+        if (targetPosition >= groupProducts.size()) {
+            throw new IllegalArgumentException(
+                String.format("Pozycja %d jest poza zakresem (grupa ma %d produktów)", 
+                            targetPosition, groupProducts.size()));
+        }
+
+        // Usuń produkt z listy
+        groupProducts.remove(product);
+        
+        // Wstaw produkt na docelową pozycję
+        groupProducts.add(targetPosition, product);
+        
+        // Zaktualizuj displayOrder dla wszystkich produktów w grupie
+        for (int i = 0; i < groupProducts.size(); i++) {
+            Product p = groupProducts.get(i);
+            p.setDisplayOrder(i);
+            productRepository.save(p);
+        }
+        
+        logger.info("✅ Produkt ID {} przesunięty na pozycję {}", product.getId(), targetPosition);
+        return true;
+    }
+
+    /**
+     * Zamień miejscami dwa produkty w tej samej grupie
+     * 
+     * @param productId1 ID pierwszego produktu
+     * @param productId2 ID drugiego produktu
+     * @return true jeśli zamiana się powiodła
+     */
+    @Transactional
+    public boolean swapProducts(Long productId1, Long productId2) {
+        Product product1 = productRepository.findById(productId1)
+            .orElseThrow(() -> new IllegalArgumentException("Produkt o ID " + productId1 + " nie został znaleziony"));
+        Product product2 = productRepository.findById(productId2)
+            .orElseThrow(() -> new IllegalArgumentException("Produkt o ID " + productId2 + " nie został znaleziony"));
+        
+        return swapProducts(product1, product2);
+    }
+
+    /**
+     * Zamień miejscami dwa produkty w tej samej grupie
+     */
+    @Transactional
+    public boolean swapProducts(Product product1, Product product2) {
+        // Sprawdź czy produkty są w tej samej grupie
+        if (!product1.getCategory().equals(product2.getCategory()) ||
+            !product1.getManufacturer().equals(product2.getManufacturer()) ||
+            !product1.getGroupName().equals(product2.getGroupName())) {
+            throw new IllegalArgumentException(
+                String.format("Produkty muszą być w tej samej grupie: %s/%s/%s vs %s/%s/%s",
+                            product1.getCategory(), product1.getManufacturer(), product1.getGroupName(),
+                            product2.getCategory(), product2.getManufacturer(), product2.getGroupName()));
+        }
+
+        // Zamień miejscami displayOrder
+        Integer order1 = product1.getDisplayOrder() != null ? product1.getDisplayOrder() : 0;
+        Integer order2 = product2.getDisplayOrder() != null ? product2.getDisplayOrder() : 0;
+        
+        product1.setDisplayOrder(order2);
+        product2.setDisplayOrder(order1);
+        
+        productRepository.save(product1);
+        productRepository.save(product2);
+        
+        logger.info("✅ Zamieniono miejscami produkty ID {} i {} ({} ↔ {})", 
+                   product1.getId(), product2.getId(), order1, order2);
+        return true;
     }
 
     /**

@@ -461,9 +461,9 @@ public class ProductController {
                     (progress) -> {
                         try {
                             // Aktualizuj licznik usuniętych produktów
-                            if (progress.getDeletedProducts() > totalDeletedProducts[0]) {
-                                totalDeletedProducts[0] = progress.getDeletedProducts();
-                            }
+                            // ⚠️ WAŻNE: Używamy maksymalnej wartości, bo callback może być wywoływany wiele razy
+                            // z różnymi wartościami (dla każdej grupy osobno, a potem finalna wartość)
+                            totalDeletedProducts[0] = Math.max(totalDeletedProducts[0], progress.getDeletedProducts());
                             
                             // Wyślij status postępu przez SSE
                             Map<String, Object> status = new HashMap<>();
@@ -627,6 +627,45 @@ public class ProductController {
     }
 
     /**
+     * Zmień kolejność produktów (drag & drop)
+     * PUT /api/products/reorder
+     * 
+     * Request Body:
+     * {
+     *   "productIds": [1, 2, 3, ...],
+     *   "category": "TILE",
+     *   "manufacturer": "CANTUS",
+     *   "groupName": "NUANE"
+     * }
+     * 
+     * Aktualizuje displayOrder dla produktów w podanej kolejności (0, 1, 2, ...)
+     */
+    @PutMapping("/reorder")
+    public ResponseEntity<?> reorderProducts(@Valid @RequestBody pl.koszela.nowoczesnebud.DTO.ReorderProductsRequest request) {
+        logger.info("🔄 Zmiana kolejności produktów: {} / {} / {} ({} produktów)", 
+                   request.getCategory(), request.getManufacturer(), request.getGroupName(), 
+                   request.getProductIds().size());
+        
+        try {
+            productService.reorderProducts(
+                request.getProductIds(),
+                request.getCategory(),
+                request.getManufacturer(),
+                request.getGroupName()
+            );
+            
+            logger.info("✅ Kolejność produktów zaktualizowana pomyślnie");
+            return ResponseEntity.ok().build();
+        } catch (IllegalArgumentException e) {
+            logger.error("❌ Błąd walidacji podczas zmiany kolejności: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            logger.error("❌ Błąd podczas zmiany kolejności produktów: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
+        }
+    }
+
+    /**
      * Eksport produktów do Excel (ZIP z plikami Excel)
      * GET /api/products/export?category=TILE
      * 
@@ -669,6 +708,86 @@ public class ProductController {
         } catch (IllegalArgumentException e) {
             logger.error("❌ Błąd walidacji eksportu: {}", e.getMessage());
             return ResponseEntity.badRequest().build();
+        }
+    }
+
+    /**
+     * Przesuń produkt o jedną pozycję w górę (zmniejsz displayOrder)
+     * POST /api/products/{id}/move-up
+     * 
+     * @return 200 OK z zaktualizowanym produktem jeśli operacja się powiodła
+     * @return 400 Bad Request jeśli produkt jest już na pierwszej pozycji
+     * @return 404 Not Found jeśli produkt nie istnieje
+     */
+    @PostMapping("/{id}/move-up")
+    public ResponseEntity<Product> moveProductUp(@PathVariable Long id) {
+        logger.info("🔼 Przesuwanie produktu ID {} w górę", id);
+        
+        if (!productService.getProductById(id).isPresent()) {
+            logger.warn("⚠️ Produkt ID {} nie istnieje", id);
+            return ResponseEntity.notFound().build();
+        }
+        
+        try {
+            boolean moved = productService.moveProductUp(id);
+            
+            if (!moved) {
+                logger.info("ℹ️ Produkt ID {} jest już na pierwszej pozycji - nie można przesunąć wyżej", id);
+                return ResponseEntity.badRequest().build();
+            }
+            
+            Product updatedProduct = productService.getProductById(id)
+                .orElseThrow(() -> new IllegalStateException("Produkt został przesunięty, ale nie można go pobrać"));
+            
+            logger.info("✅ Produkt ID {} przesunięty w górę pomyślnie", id);
+            return ResponseEntity.ok(updatedProduct);
+            
+        } catch (IllegalArgumentException e) {
+            logger.error("❌ Błąd podczas przesuwania produktu w górę: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            logger.error("❌ Nieoczekiwany błąd podczas przesuwania produktu w górę: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * Przesuń produkt o jedną pozycję w dół (zwiększ displayOrder)
+     * POST /api/products/{id}/move-down
+     * 
+     * @return 200 OK z zaktualizowanym produktem jeśli operacja się powiodła
+     * @return 400 Bad Request jeśli produkt jest już na ostatniej pozycji
+     * @return 404 Not Found jeśli produkt nie istnieje
+     */
+    @PostMapping("/{id}/move-down")
+    public ResponseEntity<Product> moveProductDown(@PathVariable Long id) {
+        logger.info("🔽 Przesuwanie produktu ID {} w dół", id);
+        
+        if (!productService.getProductById(id).isPresent()) {
+            logger.warn("⚠️ Produkt ID {} nie istnieje", id);
+            return ResponseEntity.notFound().build();
+        }
+        
+        try {
+            boolean moved = productService.moveProductDown(id);
+            
+            if (!moved) {
+                logger.info("ℹ️ Produkt ID {} jest już na ostatniej pozycji - nie można przesunąć niżej", id);
+                return ResponseEntity.badRequest().build();
+            }
+            
+            Product updatedProduct = productService.getProductById(id)
+                .orElseThrow(() -> new IllegalStateException("Produkt został przesunięty, ale nie można go pobrać"));
+            
+            logger.info("✅ Produkt ID {} przesunięty w dół pomyślnie", id);
+            return ResponseEntity.ok(updatedProduct);
+            
+        } catch (IllegalArgumentException e) {
+            logger.error("❌ Błąd podczas przesuwania produktu w dół: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            logger.error("❌ Nieoczekiwany błąd podczas przesuwania produktu w dół: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 }
