@@ -550,12 +550,23 @@ public class ProductImportService {
             
             // Wspólne dla wszystkich kategorii
             columnMapping.put("Nazwa", "name");
+            columnMapping.put("Nazwa w ofercie", "name"); // Kompatybilność z testami i starymi plikami
             columnMapping.put("name", "name");
             
             columnMapping.put("Cena katalogowa", "unitDetalP");
             columnMapping.put("unitDetalP", "unitDetalP");
             columnMapping.put("unitDetalPrice", "unitDetalP");
             columnMapping.put("detalPrice", "unitDetalP");
+            
+            // Jednostka - wspólne dla wszystkich kategorii
+            columnMapping.put("Jednostka", "unit");
+            columnMapping.put("unit", "unit");
+            
+            // Przelicznik - wspólne dla wszystkich kategorii
+            columnMapping.put("Przelicznik", "quantityCo");
+            columnMapping.put("Przelicznik ilości", "quantityCo"); // Kompatybilność z testami i starymi plikami
+            columnMapping.put("quantityCo", "quantityCo");
+            columnMapping.put("quantityConverter", "quantityCo");
             
             columnMapping.put("Rabat podstawowy", "basicDisc");
             columnMapping.put("basicDisc", "basicDisc");
@@ -580,19 +591,12 @@ public class ProductImportService {
             
             // Różne dla różnych kategorii
             if (category == ProductCategory.ACCESSORY) {
-                // AKCESORIA: Jednostka zamiast Przelicznik, plus Typ
-                columnMapping.put("Jednostka", "unit");
-                columnMapping.put("unit", "unit");
-                
+                // AKCESORIA: Typ
                 columnMapping.put("Typ", "type");
                 columnMapping.put("type", "type");
                 columnMapping.put("accessoryType", "type");
             } else {
-                // DACHÓWKI I RYNNY: Przelicznik zamiast Jednostka, plus Typ produktu
-                columnMapping.put("Przelicznik", "quantityCo");
-                columnMapping.put("quantityCo", "quantityCo");
-                columnMapping.put("quantityConverter", "quantityCo");
-                
+                // DACHÓWKI I RYNNY: Typ produktu
                 columnMapping.put("Typ produktu", "productType");
                 columnMapping.put("productType", "productType");
             }
