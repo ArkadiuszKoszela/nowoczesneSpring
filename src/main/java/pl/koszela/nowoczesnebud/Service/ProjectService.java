@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 /**
@@ -42,6 +44,18 @@ import java.util.stream.Collectors;
 public class ProjectService {
 
     private static final Logger logger = LoggerFactory.getLogger(ProjectService.class);
+
+    /**
+     * 🔒 DEADLOCK PREVENTION: Locks per projectId to serialize draft_changes operations
+     * Prevents MySQL deadlocks when multiple concurrent requests update the same project
+     * 
+     * Key points:
+     * - ConcurrentHashMap ensures thread-safe lock creation
+     * - ReentrantLock allows same thread to acquire lock multiple times (for nested calls)
+     * - Locks are kept in memory (minimal overhead: ~1 KB per active project)
+     * - No cleanup needed: typical usage has < 100 active projects
+     */
+    private final Map<Long, ReentrantLock> projectDraftChangesLocks = new ConcurrentHashMap<>();
 
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
@@ -68,6 +82,17 @@ public class ProjectService {
         this.productRepository = productRepository;
         this.projectDraftChangeRepository = projectDraftChangeRepository;
         this.projectDraftInputRepository = projectDraftInputRepository;
+    }
+
+    /**
+     * Get or create a lock for the given projectId
+     * Uses computeIfAbsent to atomically create lock if missing
+     * 
+     * @param projectId ID projektu
+     * @return ReentrantLock for this project
+     */
+    private ReentrantLock getProjectLock(Long projectId) {
+        return projectDraftChangesLocks.computeIfAbsent(projectId, id -> new ReentrantLock());
     }
 
     /**
@@ -1179,67 +1204,84 @@ public class ProjectService {
      */
     @Transactional
     public void saveDraftChanges(Long projectId, SaveDraftChangesRequest request) {
-        // ⏱️ PERFORMANCE LOG: Start zapisu draft changes
-        int totalChanges = request.getChanges() != null ? request.getChanges().size() : 0;
-        logger.info("⏱️ [PERFORMANCE] saveDraftChanges - START | projectId: {} | kategoria: {} | zmian: {}", 
-                   projectId, request.getCategory(), totalChanges);
+        // 🔒 DEADLOCK PREVENTION: Acquire lock for this project
+        // This ensures only ONE draft_changes operation per project executes at a time
+        // Prevents MySQL deadlocks from concurrent UPSERT operations
+        ReentrantLock lock = getProjectLock(projectId);
+        logger.debug("🔒 [DEADLOCK PREVENTION] Attempting to acquire lock for project {}, category {}", 
+                    projectId, request.getCategory());
         
-        if (request.getChanges() == null || request.getChanges().isEmpty()) {
-            logger.info("⏱️ [PERFORMANCE] saveDraftChanges - END | Brak zmian do zapisania | czas: 0ms");
-            return;
+        lock.lock();
+        try {
+            logger.debug("🔒 [DEADLOCK PREVENTION] Lock acquired for project {}, category {}", 
+                        projectId, request.getCategory());
+            
+            // ⏱️ PERFORMANCE LOG: Start zapisu draft changes
+            int totalChanges = request.getChanges() != null ? request.getChanges().size() : 0;
+            logger.info("⏱️ [PERFORMANCE] saveDraftChanges - START | projectId: {} | kategoria: {} | zmian: {}", 
+                       projectId, request.getCategory(), totalChanges);
+            
+            if (request.getChanges() == null || request.getChanges().isEmpty()) {
+                logger.info("⏱️ [PERFORMANCE] saveDraftChanges - END | Brak zmian do zapisania | czas: 0ms");
+                return;
+            }
+            
+            // ⚡ OPTYMALIZACJA: Sprawdź, czy to tylko zmiana quantity (dla "Przelicz produkty")
+            // "Przelicz produkty" zmienia głównie quantity, więc możemy użyć szybszego UPDATE zamiast UPSERT
+            // Frontend wysyła wszystkie pola (retailPrice, purchasePrice, etc.), ale jeśli categoryMargin i 
+            // categoryDiscount są null, a wszystkie zmiany mają quantity != null, to prawdopodobnie to "Przelicz produkty"
+            boolean isOnlyQuantityChange = request.getCategoryMargin() == null && 
+                                           request.getCategoryDiscount() == null &&
+                                           request.getChanges().stream().allMatch(change -> 
+                                               change.getDraftQuantity() != null
+                                           ) &&
+                                           // Dodatkowo: sprawdź, czy większość zmian ma tylko quantity (opcjonalne sprawdzenie)
+                                           // Jeśli mniej niż 10% zmian ma inne pola (retailPrice, purchasePrice, etc.), 
+                                           // to prawdopodobnie to tylko zmiana quantity
+                                           request.getChanges().stream()
+                                               .filter(change -> {
+                                                   // Sprawdź, czy są inne zmiany oprócz quantity
+                                                   boolean hasOtherChanges = 
+                                                       (change.getDraftRetailPrice() != null && change.getDraftRetailPrice() != 0) ||
+                                                       (change.getDraftPurchasePrice() != null && change.getDraftPurchasePrice() != 0) ||
+                                                       (change.getDraftSellingPrice() != null && change.getDraftSellingPrice() != 0) ||
+                                                       (change.getDraftMarginPercent() != null && change.getDraftMarginPercent() != 0) ||
+                                                       (change.getDraftDiscountPercent() != null && change.getDraftDiscountPercent() != 0) ||
+                                                       (change.getDraftIsMainOption() != null);
+                                                   return hasOtherChanges;
+                                               })
+                                               .count() < request.getChanges().size() * 0.1; // Mniej niż 10% ma inne zmiany
+            
+            if (isOnlyQuantityChange) {
+                // ⚡ OPTYMALIZACJA: UPDATE tylko quantity - znacznie szybsze!
+                logger.info("⏱️ [PERFORMANCE] Wykryto tylko zmiany quantity - używam UPDATE zamiast UPSERT");
+                updateQuantitiesOnly(projectId, request);
+                return;
+            }
+            
+            // ⚡ WAŻNE: Usuń stare draft changes dla tej kategorii przed zapisem nowych
+            // To zapewni, że w project_draft_changes_ws będą tylko rekordy dla produktów z aktualnego cennika
+            // (nie będzie rekordów dla produktów, które już nie są w cenniku)
+            long deleteOldDraftsStartTime = System.currentTimeMillis();
+            logger.info("⏱️ [PERFORMANCE] Usuwanie starych draft changes dla kategorii {} przed zapisem nowych", request.getCategory());
+            int deletedCount = entityManager.createNativeQuery("DELETE FROM project_draft_changes_ws WHERE project_id = :projectId AND category = :category")
+                    .setParameter("projectId", projectId)
+                    .setParameter("category", request.getCategory())
+                    .executeUpdate();
+            entityManager.flush();
+            long deleteOldDraftsEndTime = System.currentTimeMillis();
+            logger.info("⏱️ [PERFORMANCE] Usunięto {} starych draft changes dla kategorii {} - {}ms", 
+                       deletedCount, request.getCategory(), deleteOldDraftsEndTime - deleteOldDraftsStartTime);
+        
+            // ⚡ OPTYMALIZACJA: UPSERT zamiast DELETE + INSERT dla innych zmian
+            // Po usunięciu starych rekordów, UPSERT będzie tylko INSERT (szybsze)
+            logger.info("⏱️ [PERFORMANCE] Używam UPSERT zamiast DELETE + INSERT");
+            upsertDraftChanges(projectId, request);
+        } finally {
+            lock.unlock();
+            logger.debug("🔒 [DEADLOCK PREVENTION] Lock released for project {}, category {}", 
+                        projectId, request.getCategory());
         }
-        
-        // ⚡ OPTYMALIZACJA: Sprawdź, czy to tylko zmiana quantity (dla "Przelicz produkty")
-        // "Przelicz produkty" zmienia głównie quantity, więc możemy użyć szybszego UPDATE zamiast UPSERT
-        // Frontend wysyła wszystkie pola (retailPrice, purchasePrice, etc.), ale jeśli categoryMargin i 
-        // categoryDiscount są null, a wszystkie zmiany mają quantity != null, to prawdopodobnie to "Przelicz produkty"
-        boolean isOnlyQuantityChange = request.getCategoryMargin() == null && 
-                                       request.getCategoryDiscount() == null &&
-                                       request.getChanges().stream().allMatch(change -> 
-                                           change.getDraftQuantity() != null
-                                       ) &&
-                                       // Dodatkowo: sprawdź, czy większość zmian ma tylko quantity (opcjonalne sprawdzenie)
-                                       // Jeśli mniej niż 10% zmian ma inne pola (retailPrice, purchasePrice, etc.), 
-                                       // to prawdopodobnie to tylko zmiana quantity
-                                       request.getChanges().stream()
-                                           .filter(change -> {
-                                               // Sprawdź, czy są inne zmiany oprócz quantity
-                                               boolean hasOtherChanges = 
-                                                   (change.getDraftRetailPrice() != null && change.getDraftRetailPrice() != 0) ||
-                                                   (change.getDraftPurchasePrice() != null && change.getDraftPurchasePrice() != 0) ||
-                                                   (change.getDraftSellingPrice() != null && change.getDraftSellingPrice() != 0) ||
-                                                   (change.getDraftMarginPercent() != null && change.getDraftMarginPercent() != 0) ||
-                                                   (change.getDraftDiscountPercent() != null && change.getDraftDiscountPercent() != 0) ||
-                                                   (change.getDraftIsMainOption() != null);
-                                               return hasOtherChanges;
-                                           })
-                                           .count() < request.getChanges().size() * 0.1; // Mniej niż 10% ma inne zmiany
-        
-        if (isOnlyQuantityChange) {
-            // ⚡ OPTYMALIZACJA: UPDATE tylko quantity - znacznie szybsze!
-            logger.info("⏱️ [PERFORMANCE] Wykryto tylko zmiany quantity - używam UPDATE zamiast UPSERT");
-            updateQuantitiesOnly(projectId, request);
-            return;
-        }
-        
-        // ⚡ WAŻNE: Usuń stare draft changes dla tej kategorii przed zapisem nowych
-        // To zapewni, że w project_draft_changes_ws będą tylko rekordy dla produktów z aktualnego cennika
-        // (nie będzie rekordów dla produktów, które już nie są w cenniku)
-        long deleteOldDraftsStartTime = System.currentTimeMillis();
-        logger.info("⏱️ [PERFORMANCE] Usuwanie starych draft changes dla kategorii {} przed zapisem nowych", request.getCategory());
-        int deletedCount = entityManager.createNativeQuery("DELETE FROM project_draft_changes_ws WHERE project_id = :projectId AND category = :category")
-                .setParameter("projectId", projectId)
-                .setParameter("category", request.getCategory())
-                .executeUpdate();
-        entityManager.flush();
-        long deleteOldDraftsEndTime = System.currentTimeMillis();
-        logger.info("⏱️ [PERFORMANCE] Usunięto {} starych draft changes dla kategorii {} - {}ms", 
-                   deletedCount, request.getCategory(), deleteOldDraftsEndTime - deleteOldDraftsStartTime);
-        
-        // ⚡ OPTYMALIZACJA: UPSERT zamiast DELETE + INSERT dla innych zmian
-        // Po usunięciu starych rekordów, UPSERT będzie tylko INSERT (szybsze)
-        logger.info("⏱️ [PERFORMANCE] Używam UPSERT zamiast DELETE + INSERT");
-        upsertDraftChanges(projectId, request);
     }
     
     /**
