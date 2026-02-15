@@ -22,6 +22,7 @@ import pl.koszela.nowoczesnebud.Repository.AppUserRepository;
 import pl.koszela.nowoczesnebud.Repository.RefreshTokenRepository;
 import pl.koszela.nowoczesnebud.Security.JwtService;
 import pl.koszela.nowoczesnebud.Security.UserDetailsServiceImpl;
+import pl.koszela.nowoczesnebud.Exception.UnauthorizedRefreshTokenException;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -153,16 +154,16 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public AuthResponse refreshToken(String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
-            throw new IllegalArgumentException("Brak refresh tokenu");
+            throw new UnauthorizedRefreshTokenException("Brak refresh tokenu");
         }
 
         RefreshToken tokenEntity = refreshTokenRepository.findByTokenAndRevokedFalse(refreshToken)
-                .orElseThrow(() -> new IllegalArgumentException("Nieprawidłowy refresh token"));
+                .orElseThrow(() -> new UnauthorizedRefreshTokenException("Nieprawidłowy refresh token"));
 
         if (tokenEntity.getExpiresAt().isBefore(LocalDateTime.now())) {
             tokenEntity.setRevoked(true);
             refreshTokenRepository.save(tokenEntity);
-            throw new IllegalArgumentException("Refresh token wygasł");
+            throw new UnauthorizedRefreshTokenException("Refresh token wygasł");
         }
 
         AppUser user = tokenEntity.getUser();
