@@ -2,15 +2,12 @@ package pl.koszela.nowoczesnebud.Config;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-
-import java.util.Arrays;
 
 /**
  * Globalna konfiguracja CORS - zastępuje duplikowane @CrossOrigin w kontrolerach
@@ -19,18 +16,13 @@ import java.util.Arrays;
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
-    @Value("${app.auth.allowed-origins:http://localhost:4200,https://angular-nowoczesne-af04d5c56981.herokuapp.com}")
-    private String allowedOriginsRaw;
-
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        String[] allowedOrigins = Arrays.stream(allowedOriginsRaw.split(","))
-                .map(String::trim)
-                .filter(origin -> !origin.isBlank())
-                .toArray(String[]::new);
-
         registry.addMapping("/api/**")
-                .allowedOrigins(allowedOrigins)
+                .allowedOrigins(
+                    "http://localhost:4200",
+                    "https://angular-nowoczesne-af04d5c56981.herokuapp.com"
+                )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true)
