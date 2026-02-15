@@ -1470,12 +1470,18 @@ public class ProductService {
             Integer skontoDiscount,
             String productType,
             pl.koszela.nowoczesnebud.Model.DiscountCalculationMethod discountCalculationMethod) {
+
+        boolean shouldIgnoreProductType = category != ProductCategory.TILE && productType != null && !"ALL".equals(productType);
+        if (shouldIgnoreProductType) {
+            logger.info("ℹ️ Ignoruję productType='{}' dla kategorii {}. Dla tej kategorii używam ALL.", productType, category);
+        }
+        final String effectiveProductType = shouldIgnoreProductType ? "ALL" : productType;
         
         logger.info("🎯 Bulk discount update:");
         logger.info("  Kategoria: {}", category);
         logger.info("  Producent: {}", manufacturer);
         logger.info("  Grupa: {}", groupName != null ? groupName : "WSZYSTKIE (cały producent)");
-        logger.info("  Typ produktu: {}", productType != null && !"ALL".equals(productType) ? productType : "WSZYSTKIE");
+        logger.info("  Typ produktu: {}", effectiveProductType != null && !"ALL".equals(effectiveProductType) ? effectiveProductType : "WSZYSTKIE");
         logger.info("  Rabaty: basic={}, additional={}, promotion={}, skonto={}",
                    basicDiscount, additionalDiscount, promotionDiscount, skontoDiscount);
         logger.info("  Metoda obliczania: {}", discountCalculationMethod);
@@ -1498,11 +1504,11 @@ public class ProductService {
         List<Product> products = productRepository.findByCategory(category).stream()
                 .filter(p -> manufacturer.equals(p.getManufacturer()))
                 .filter(p -> groupName == null || groupName.equals(p.getGroupName()))
-                .filter(p -> productType == null || "ALL".equals(productType) || productType.equals(p.getProductType())) // Filtruj po typie produktu ("ALL" = wszystkie typy)
+                .filter(p -> effectiveProductType == null || "ALL".equals(effectiveProductType) || effectiveProductType.equals(p.getProductType())) // Filtruj po typie produktu ("ALL" = wszystkie typy)
                 .toList();
         
         if (products.isEmpty()) {
-            String typeInfo = (productType != null && !"ALL".equals(productType)) ? " typu " + productType : "";
+            String typeInfo = (effectiveProductType != null && !"ALL".equals(effectiveProductType)) ? " typu " + effectiveProductType : "";
             logger.warn("⚠️ Nie znaleziono produktów dla {} / {}{}", 
                        manufacturer, 
                        groupName != null ? groupName : "całego producenta",
@@ -1510,7 +1516,7 @@ public class ProductService {
             return products;
         }
         
-        String typeInfo = (productType != null && !"ALL".equals(productType)) ? " typu " + productType : "";
+        String typeInfo = (effectiveProductType != null && !"ALL".equals(effectiveProductType)) ? " typu " + effectiveProductType : "";
         logger.info("📦 Znaleziono {} produktów{}", products.size(), typeInfo);
         
         // ⚡ OPTYMALIZACJA: Użyj JDBC batch UPDATE dla dużej liczby produktów (znacznie szybsze niż Hibernate ORM)
