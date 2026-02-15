@@ -35,7 +35,6 @@ import java.util.stream.Collectors;
 public class AuthController {
 
     private static final String REFRESH_COOKIE_NAME = "refreshToken";
-    private static final String REFRESH_HEADER_NAME = "X-Refresh-Token";
 
     private final AuthService authService;
 
@@ -121,7 +120,7 @@ public class AuthController {
         if (!isRequestFromAllowedOrigin(request)) {
             return ResponseEntity.status(403).build();
         }
-        String refreshToken = extractRefreshToken(request);
+        String refreshToken = extractRefreshTokenFromCookie(request);
         AuthResponse authResponse = authService.refreshToken(refreshToken);
         return ResponseEntity.ok(authResponse);
     }
@@ -132,7 +131,7 @@ public class AuthController {
             return ResponseEntity.status(403).body(new MessageResponse("Niedozwolone pochodzenie żądania"));
         }
 
-        String refreshToken = extractRefreshToken(request);
+        String refreshToken = extractRefreshTokenFromCookie(request);
         authService.logout(refreshToken);
 
         CookieSettings cookieSettings = resolveCookieSettings(request);
@@ -323,19 +322,6 @@ public class AuthController {
             }
         }
         return null;
-    }
-
-    private String extractRefreshToken(HttpServletRequest request) {
-        String refreshTokenFromCookie = extractRefreshTokenFromCookie(request);
-        if (refreshTokenFromCookie != null && !refreshTokenFromCookie.isBlank()) {
-            return refreshTokenFromCookie;
-        }
-
-        String refreshTokenFromHeader = request.getHeader(REFRESH_HEADER_NAME);
-        if (refreshTokenFromHeader == null || refreshTokenFromHeader.isBlank()) {
-            return null;
-        }
-        return refreshTokenFromHeader.trim();
     }
 
     private static final class CookieSettings {
