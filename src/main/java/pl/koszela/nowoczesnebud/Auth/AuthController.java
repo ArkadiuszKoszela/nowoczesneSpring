@@ -100,7 +100,7 @@ public class AuthController {
         ResponseCookie refreshCookie = buildRefreshCookie(refreshToken, authResponse.getRefreshExpiresInMs(), httpRequest);
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, buildSetCookieHeader(refreshCookie, httpRequest))
                 .body(authResponse);
     }
 
@@ -111,7 +111,7 @@ public class AuthController {
         ResponseCookie refreshCookie = buildRefreshCookie(refreshToken, authResponse.getRefreshExpiresInMs(), httpRequest);
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, buildSetCookieHeader(refreshCookie, httpRequest))
                 .body(authResponse);
     }
 
@@ -144,7 +144,7 @@ public class AuthController {
                 .build();
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, clearCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, buildSetCookieHeader(clearCookie, request))
                 .body(new MessageResponse("Wylogowano pomyślnie"));
     }
 
@@ -167,6 +167,26 @@ public class AuthController {
                 .maxAge(refreshExpiresInMs / 1000)
                 .sameSite(cookieSettings.sameSite)
                 .build();
+    }
+
+    private String buildSetCookieHeader(ResponseCookie cookie, HttpServletRequest request) {
+        if (!shouldAppendPartitionedAttribute(request)) {
+            return cookie.toString();
+        }
+        return cookie.toString() + "; Partitioned";
+    }
+
+    private boolean shouldAppendPartitionedAttribute(HttpServletRequest request) {
+        CookieSettings cookieSettings = resolveCookieSettings(request);
+        if (!cookieSettings.secure || !"None".equals(cookieSettings.sameSite)) {
+            return false;
+        }
+
+        String origin = request.getHeader("Origin");
+        if (origin == null || origin.isBlank()) {
+            return false;
+        }
+        return isCrossOriginRequest(request, origin);
     }
 
     private CookieSettings resolveCookieSettings(HttpServletRequest request) {
