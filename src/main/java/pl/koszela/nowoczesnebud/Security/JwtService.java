@@ -5,6 +5,8 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,9 @@ import java.util.Date;
 
 @Service
 public class JwtService {
+    private static final Logger logger = LoggerFactory.getLogger(JwtService.class);
+    private static final long SAFE_DEFAULT_REFRESH_EXPIRATION_MS = 7L * 24 * 60 * 60 * 1000;
+    private static final long SAFE_DEFAULT_REMEMBER_REFRESH_EXPIRATION_MS = 30L * 24 * 60 * 60 * 1000;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -34,6 +39,40 @@ public class JwtService {
     public void init() {
         byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
         signingKey = Keys.hmacShaKeyFor(keyBytes);
+        normalizeTokenExpirations();
+        logger.info("JWT TTL configured: access={}ms, refresh={}ms, rememberRefresh={}ms",
+                accessTokenExpirationMs,
+                refreshTokenExpirationMs,
+                rememberRefreshTokenExpirationMs);
+    }
+
+    private void normalizeTokenExpirations() {
+        if (accessTokenExpirationMs <= 0) {
+            throw new IllegalStateException("Nieprawidłowe jwt.access-expiration-ms (musi być > 0)");
+        }
+
+        if (refreshTokenExpirationMs <= accessTokenExpirationMs) {
+            logger.error(
+                    "Konfiguracja jwt.refresh-expiration-ms={} jest nieprawidłowa (<= access {}). " +
+                            "Używam bezpiecznej wartości {} ms.",
+                    refreshTokenExpirationMs,
+                    accessTokenExpirationMs,
+                    SAFE_DEFAULT_REFRESH_EXPIRATION_MS
+            );
+            refreshTokenExpirationMs = SAFE_DEFAULT_REFRESH_EXPIRATION_MS;
+        }
+
+        if (rememberRefreshTokenExpirationMs < refreshTokenExpirationMs) {
+            long normalizedRemember = Math.max(SAFE_DEFAULT_REMEMBER_REFRESH_EXPIRATION_MS, refreshTokenExpirationMs);
+            logger.warn(
+                    "Konfiguracja jwt.remember-refresh-expiration-ms={} jest mniejsza niż refresh {}. " +
+                            "Używam {} ms.",
+                    rememberRefreshTokenExpirationMs,
+                    refreshTokenExpirationMs,
+                    normalizedRemember
+            );
+            rememberRefreshTokenExpirationMs = normalizedRemember;
+        }
     }
 
     public String generateAccessToken(UserDetails userDetails) {
