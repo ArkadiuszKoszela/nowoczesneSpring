@@ -94,10 +94,10 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse authResponse = authService.login(request);
         String refreshToken = authResponse.getRefreshToken();
-        ResponseCookie refreshCookie = buildRefreshCookie(refreshToken, authResponse.getRefreshExpiresInMs(), httpRequest);
+        ResponseCookie refreshCookie = buildRefreshCookie(refreshToken, authResponse.getRefreshExpiresInMs());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
@@ -105,10 +105,10 @@ public class AuthController {
     }
 
     @PostMapping("/google")
-    public ResponseEntity<AuthResponse> googleLogin(@Valid @RequestBody GoogleLoginRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<AuthResponse> googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
         AuthResponse authResponse = authService.googleLogin(request);
         String refreshToken = authResponse.getRefreshToken();
-        ResponseCookie refreshCookie = buildRefreshCookie(refreshToken, authResponse.getRefreshExpiresInMs(), httpRequest);
+        ResponseCookie refreshCookie = buildRefreshCookie(refreshToken, authResponse.getRefreshExpiresInMs());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
@@ -134,13 +134,12 @@ public class AuthController {
         String refreshToken = extractRefreshTokenFromCookie(request);
         authService.logout(refreshToken);
 
-        CookieSettings cookieSettings = resolveCookieSettings(request);
         ResponseCookie clearCookie = ResponseCookie.from(REFRESH_COOKIE_NAME, "")
                 .httpOnly(true)
-                .secure(cookieSettings.secure)
+                .secure(cookieSecure)
                 .path("/")
                 .maxAge(0)
-                .sameSite(cookieSettings.sameSite)
+                .sameSite(cookieSameSite)
                 .build();
 
         return ResponseEntity.ok()
@@ -158,82 +157,14 @@ public class AuthController {
         return ResponseEntity.ok(profile);
     }
 
-    private ResponseCookie buildRefreshCookie(String refreshToken, long refreshExpiresInMs, HttpServletRequest request) {
-        CookieSettings cookieSettings = resolveCookieSettings(request);
+    private ResponseCookie buildRefreshCookie(String refreshToken, long refreshExpiresInMs) {
         return ResponseCookie.from(REFRESH_COOKIE_NAME, refreshToken)
                 .httpOnly(true)
-                .secure(cookieSettings.secure)
+                .secure(cookieSecure)
                 .path("/")
                 .maxAge(refreshExpiresInMs / 1000)
-                .sameSite(cookieSettings.sameSite)
+                .sameSite(cookieSameSite)
                 .build();
-    }
-
-    private CookieSettings resolveCookieSettings(HttpServletRequest request) {
-        boolean secureRequest = isSecureRequest(request);
-        String origin = request.getHeader("Origin");
-        boolean hasHttpsOrigin = origin != null && origin.toLowerCase(Locale.ROOT).startsWith("https://");
-        boolean crossOriginRequest = hasHttpsOrigin && isCrossOriginRequest(request, origin);
-
-        if (secureRequest && crossOriginRequest) {
-            return new CookieSettings(true, "None");
-        }
-
-        if ("None".equals(cookieSameSite)) {
-            return new CookieSettings(true, "None");
-        }
-
-        return new CookieSettings(cookieSecure, cookieSameSite);
-    }
-
-    private boolean isSecureRequest(HttpServletRequest request) {
-        String forwardedProto = request.getHeader("X-Forwarded-Proto");
-        if (forwardedProto != null && !forwardedProto.isBlank()) {
-            return "https".equalsIgnoreCase(forwardedProto.trim());
-        }
-        return request.isSecure();
-    }
-
-    private boolean isCrossOriginRequest(HttpServletRequest request, String origin) {
-        String requestOrigin = extractRequestOrigin(request);
-        if (requestOrigin == null) {
-            return true;
-        }
-        return !requestOrigin.equalsIgnoreCase(origin.trim());
-    }
-
-    private String extractRequestOrigin(HttpServletRequest request) {
-        String scheme = request.getHeader("X-Forwarded-Proto");
-        if (scheme == null || scheme.isBlank()) {
-            scheme = request.getScheme();
-        }
-
-        String host = request.getHeader("X-Forwarded-Host");
-        if (host == null || host.isBlank()) {
-            host = request.getHeader("Host");
-        }
-        if (host == null || host.isBlank()) {
-            String serverName = request.getServerName();
-            int serverPort = request.getServerPort();
-            if (serverName == null || serverName.isBlank()) {
-                return null;
-            }
-            boolean defaultHttpPort = "http".equalsIgnoreCase(scheme) && serverPort == 80;
-            boolean defaultHttpsPort = "https".equalsIgnoreCase(scheme) && serverPort == 443;
-            if (serverPort <= 0 || defaultHttpPort || defaultHttpsPort) {
-                host = serverName;
-            } else {
-                host = serverName + ":" + serverPort;
-            }
-        } else {
-            host = host.split(",")[0].trim();
-        }
-
-        if (scheme == null || scheme.isBlank() || host.isBlank()) {
-            return null;
-        }
-
-        return scheme + "://" + host;
     }
 
     private boolean isRequestFromAllowedOrigin(HttpServletRequest request) {
@@ -302,15 +233,5 @@ public class AuthController {
             }
         }
         return null;
-    }
-
-    private static final class CookieSettings {
-        private final boolean secure;
-        private final String sameSite;
-
-        private CookieSettings(boolean secure, String sameSite) {
-            this.secure = secure;
-            this.sameSite = sameSite;
-        }
     }
 }
