@@ -109,19 +109,10 @@ class AuthControllerIntegrationTest {
         String refreshToken = extractCookieValue(setCookieHeader, "refreshToken");
 
         mockMvc.perform(post("/api/auth/refresh")
-                        .header("Origin", "http://localhost:4200")
                         .cookie(new MockCookie("refreshToken", refreshToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
                 .andExpect(jsonPath("$.username").value(username));
-    }
-
-    @Test
-    void shouldReturnUnauthorizedWhenRefreshCookieMissing() throws Exception {
-        mockMvc.perform(post("/api/auth/refresh")
-                        .header("Origin", "http://localhost:4200"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Brak refresh tokenu"));
     }
 
     @Test

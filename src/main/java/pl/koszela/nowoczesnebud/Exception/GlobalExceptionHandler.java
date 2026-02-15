@@ -136,25 +136,6 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Obsługa problemów z refresh tokenem (sesja wygasła / brak cookie)
-     */
-    @ExceptionHandler(UnauthorizedRefreshTokenException.class)
-    public ResponseEntity<ErrorResponse> handleUnauthorizedRefreshTokenException(
-            UnauthorizedRefreshTokenException ex, WebRequest request) {
-
-        logger.warn("🔐 Refresh token unauthorized: {}", ex.getMessage());
-
-        ErrorResponse error = new ErrorResponse(
-                HttpStatus.UNAUTHORIZED.value(),
-                ex.getMessage(),
-                LocalDateTime.now(),
-                request.getDescription(false)
-        );
-
-        return new ResponseEntity<>(error, HttpStatus.UNAUTHORIZED);
-    }
-
-    /**
      * Catch-all dla pozostałych wyjątków
      */
     @ExceptionHandler(Exception.class)
