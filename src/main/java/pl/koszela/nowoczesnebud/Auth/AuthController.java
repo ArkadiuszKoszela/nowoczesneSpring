@@ -19,8 +19,15 @@ import pl.koszela.nowoczesnebud.DTO.ResendVerificationCodeRequest;
 import pl.koszela.nowoczesnebud.DTO.UserProfileResponse;
 import pl.koszela.nowoczesnebud.DTO.VerifyEmailRequest;
 
+import javax.annotation.PostConstruct;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
+import java.net.URI;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -34,8 +41,26 @@ public class AuthController {
     @Value("${app.auth.cookie-secure:false}")
     private boolean cookieSecure;
 
+    @Value("${app.auth.cookie-samesite:Strict}")
+    private String cookieSameSite;
+
+    @Value("${app.auth.allowed-origins:http://localhost:4200}")
+    private String allowedOriginsRaw;
+
+    private Set<String> allowedOrigins = Collections.emptySet();
+
     public AuthController(AuthService authService) {
         this.authService = authService;
+    }
+
+    @PostConstruct
+    public void initSecurityProperties() {
+        this.cookieSameSite = normalizeSameSite(cookieSameSite);
+        this.allowedOrigins = Arrays.stream(allowedOriginsRaw.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .map(value -> value.toLowerCase(Locale.ROOT))
+                .collect(Collectors.toSet());
     }
 
     @PostMapping("/register")
@@ -92,6 +117,9 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refreshToken(HttpServletRequest request) {
+        if (!isRequestFromAllowedOrigin(request)) {
+            return ResponseEntity.status(403).build();
+        }
         String refreshToken = extractRefreshTokenFromCookie(request);
         AuthResponse authResponse = authService.refreshToken(refreshToken);
         return ResponseEntity.ok(authResponse);
@@ -99,6 +127,10 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<MessageResponse> logout(HttpServletRequest request) {
+        if (!isRequestFromAllowedOrigin(request)) {
+            return ResponseEntity.status(403).body(new MessageResponse("Niedozwolone pochodzenie żądania"));
+        }
+
         String refreshToken = extractRefreshTokenFromCookie(request);
         authService.logout(refreshToken);
 
@@ -107,7 +139,7 @@ public class AuthController {
                 .secure(cookieSecure)
                 .path("/")
                 .maxAge(0)
-                .sameSite("Strict")
+                .sameSite(cookieSameSite)
                 .build();
 
         return ResponseEntity.ok()
@@ -131,8 +163,64 @@ public class AuthController {
                 .secure(cookieSecure)
                 .path("/")
                 .maxAge(refreshExpiresInMs / 1000)
-                .sameSite("Strict")
+                .sameSite(cookieSameSite)
                 .build();
+    }
+
+    private boolean isRequestFromAllowedOrigin(HttpServletRequest request) {
+        String origin = request.getHeader("Origin");
+        if (origin != null && !origin.isBlank()) {
+            return isOriginAllowed(origin);
+        }
+
+        String referer = request.getHeader("Referer");
+        if (referer != null && !referer.isBlank()) {
+            String refererOrigin = extractOriginFromReferer(referer);
+            return refererOrigin != null && isOriginAllowed(refererOrigin);
+        }
+
+        return false;
+    }
+
+    private boolean isOriginAllowed(String origin) {
+        return allowedOrigins.contains(origin.trim().toLowerCase(Locale.ROOT));
+    }
+
+    private String extractOriginFromReferer(String referer) {
+        try {
+            URI uri = URI.create(referer);
+            String scheme = uri.getScheme();
+            String host = uri.getHost();
+            if (scheme == null || host == null) {
+                return null;
+            }
+
+            int port = uri.getPort();
+            boolean defaultHttpPort = "http".equalsIgnoreCase(scheme) && port == 80;
+            boolean defaultHttpsPort = "https".equalsIgnoreCase(scheme) && port == 443;
+            if (port == -1 || defaultHttpPort || defaultHttpsPort) {
+                return scheme + "://" + host;
+            }
+            return scheme + "://" + host + ":" + port;
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private String normalizeSameSite(String value) {
+        if (value == null || value.isBlank()) {
+            return "Strict";
+        }
+        if ("strict".equalsIgnoreCase(value)) {
+            return "Strict";
+        }
+        if ("lax".equalsIgnoreCase(value)) {
+            return "Lax";
+        }
+        if ("none".equalsIgnoreCase(value)) {
+            return "None";
+        }
+        return "Strict";
     }
 
     private String extractRefreshTokenFromCookie(HttpServletRequest request) {
