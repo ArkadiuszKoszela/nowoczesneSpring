@@ -25,6 +25,7 @@ public class CalendarIntegrationService {
     private final GoogleCalendarGatewayService googleCalendarGatewayService;
     private final CalendarOAuthStateService calendarOAuthStateService;
     private final CalendarTokenCipherService tokenCipherService;
+    private final ClientWorkflowService clientWorkflowService;
 
     @Value("${app.calendar.oauth.client-id:}")
     private String oauthClientId;
@@ -43,13 +44,15 @@ public class CalendarIntegrationService {
                                       ClientCalendarEventLinkRepository eventLinkRepository,
                                       GoogleCalendarGatewayService googleCalendarGatewayService,
                                       CalendarOAuthStateService calendarOAuthStateService,
-                                      CalendarTokenCipherService tokenCipherService) {
+                                      CalendarTokenCipherService tokenCipherService,
+                                      ClientWorkflowService clientWorkflowService) {
         this.appUserRepository = appUserRepository;
         this.connectionRepository = connectionRepository;
         this.eventLinkRepository = eventLinkRepository;
         this.googleCalendarGatewayService = googleCalendarGatewayService;
         this.calendarOAuthStateService = calendarOAuthStateService;
         this.tokenCipherService = tokenCipherService;
+        this.clientWorkflowService = clientWorkflowService;
     }
 
     public String buildConnectUrl(Long userId) {
@@ -206,6 +209,16 @@ public class CalendarIntegrationService {
         Map<String, Object> created = googleCalendarGatewayService.createEvent(accessToken, calendarId, payload);
         CalendarEventResponse response = mapEventResponse(created, calendarId);
         saveLink(userId, request, response, start, end);
+        clientWorkflowService.appendCalendarHistory(
+                request.getProjectId(),
+                request.getClientId(),
+                response.getId(),
+                response.getSummary(),
+                start.toLocalDateTime(),
+                response.getStatus(),
+                request.getDescription(),
+                userId
+        );
         return response;
     }
 
@@ -223,6 +236,16 @@ public class CalendarIntegrationService {
         Map<String, Object> updated = googleCalendarGatewayService.updateEvent(accessToken, calendarId, eventId, payload);
         CalendarEventResponse response = mapEventResponse(updated, calendarId);
         saveLink(userId, request, response, start, end);
+        clientWorkflowService.appendCalendarHistory(
+                request.getProjectId(),
+                request.getClientId(),
+                response.getId(),
+                response.getSummary(),
+                start.toLocalDateTime(),
+                "updated",
+                request.getDescription(),
+                userId
+        );
         return response;
     }
 
@@ -231,10 +254,34 @@ public class CalendarIntegrationService {
         GoogleCalendarConnection connection = getConnection(userId);
         String resolvedCalendarId = resolveCalendarId(calendarId, connection);
         String accessToken = googleCalendarGatewayService.resolveValidAccessToken(connection);
+
+        Long projectId = null;
+        Long clientId = null;
+        String summary = null;
+        LocalDateTime eventAt = null;
+        Optional<ClientCalendarEventLink> existingLink = eventLinkRepository.findByUserIdAndGoogleEventId(userId, eventId);
+        if (existingLink.isPresent()) {
+            projectId = existingLink.get().getProjectId();
+            clientId = existingLink.get().getClientId();
+            summary = existingLink.get().getSummary();
+            eventAt = existingLink.get().getStartAt();
+        }
+
         googleCalendarGatewayService.deleteEvent(accessToken, resolvedCalendarId, eventId);
 
         eventLinkRepository.findByUserIdAndGoogleEventId(userId, eventId)
                 .ifPresent(eventLinkRepository::delete);
+
+        clientWorkflowService.appendCalendarHistory(
+                projectId,
+                clientId,
+                eventId,
+                summary,
+                eventAt,
+                "deleted",
+                null,
+                userId
+        );
     }
 
     public List<CalendarEventResponse> listEvents(Long userId, String fromIso, String toIso, String calendarId) {
